@@ -19,8 +19,8 @@ export default function LoginPage() {
     if (authError) { setError(authError.message); setLoading(false); return }
 
     // Check if account is locked
-    const { data: profile } = await supabase
-      .from('profiles' as any).select('is_locked').eq('id', data.user!.id).single()
+    const { data: profile } = await (supabase as any)
+      .from('profiles').select('is_locked').eq('id', data.user!.id).single()
     if (profile?.is_locked) {
       await supabase.auth.signOut()
       setError('Your account has been disabled. Contact your administrator.')
