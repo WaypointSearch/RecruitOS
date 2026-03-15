@@ -81,7 +81,7 @@ export default async function CandidatesPage({
                 <td className="px-4 py-3 text-gray-500">{c.time_in_current_role || '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {(c.tags ?? []).map(t => (
+                    {(c.tags ?? []).map((t: string) => (
                       <span key={t} className="badge badge-gray">{t}</span>
                     ))}
                   </div>
