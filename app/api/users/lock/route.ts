@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
 
   // Update profile lock flag
-  await admin.from('profiles').update({ is_locked: locked }).eq('id', userId)
+  await (admin.from('profiles') as any).update({ is_locked: locked }).eq('id', userId)
 
   // Also ban/unban at the auth level so their token is immediately invalidated
   await admin.auth.admin.updateUserById(userId, { ban_duration: locked ? '876000h' : 'none' })
