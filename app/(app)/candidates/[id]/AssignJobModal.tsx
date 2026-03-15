@@ -31,6 +31,7 @@ export default function AssignJobModal({
   const [stage, setStage] = useState('Prescreen Scheduled')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
   const router = useRouter()
   const supabase = createSupabaseClient()
 
@@ -53,7 +54,7 @@ export default function AssignJobModal({
           stage,
           added_by: currentProfile.id,
         },
-      ])
+      ] as any)
 
     if (err) {
       setError(err.code === '23505' ? 'Already assigned to this job.' : err.message)
@@ -61,8 +62,7 @@ export default function AssignJobModal({
       return
     }
 
-    // Log activity
-    const job = jobs.find((j) => j.id === jobId)
+    const job = jobs.find(j => j.id === jobId)
 
     await supabase
       .from('activities')
@@ -75,29 +75,39 @@ export default function AssignJobModal({
           created_by: currentProfile.id,
           created_by_name: currentProfile.full_name,
         },
-      ])
+      ] as any)
 
     setLoading(false)
     setOpen(false)
     router.refresh()
   }
 
-  if (!open)
+  if (!open) {
     return (
-      <button className="btn btn-sm gap-1.5 flex-shrink-0" onClick={() => setOpen(true)}>
+      <button
+        className="btn btn-sm gap-1.5 flex-shrink-0"
+        onClick={() => setOpen(true)}
+      >
         <Plus size={13} />
         Assign to job
       </button>
     )
+  }
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpen(false)} />
+      <div
+        className="fixed inset-0 bg-black/40 z-40"
+        onClick={() => setOpen(false)}
+      />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900">Assign to job pipeline</h2>
+            <h2 className="font-semibold text-gray-900">
+              Assign to job pipeline
+            </h2>
 
             <button
               onClick={() => setOpen(false)}
@@ -108,8 +118,11 @@ export default function AssignJobModal({
           </div>
 
           <form onSubmit={submit} className="p-5 space-y-4">
+
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                {error}
+              </p>
             )}
 
             <div>
@@ -118,12 +131,12 @@ export default function AssignJobModal({
               <select
                 className="input"
                 value={jobId}
-                onChange={(e) => setJobId(e.target.value)}
+                onChange={e => setJobId(e.target.value)}
                 required
               >
                 <option value="">Select a job…</option>
 
-                {jobs.map((j) => (
+                {jobs.map(j => (
                   <option key={j.id} value={j.id}>
                     {j.title} — {j.companies?.name}
                   </option>
@@ -137,9 +150,9 @@ export default function AssignJobModal({
               <select
                 className="input"
                 value={stage}
-                onChange={(e) => setStage(e.target.value)}
+                onChange={e => setStage(e.target.value)}
               >
-                {STAGES.map((s) => (
+                {STAGES.map(s => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -148,6 +161,7 @@ export default function AssignJobModal({
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
+
               <button
                 type="button"
                 className="btn"
@@ -163,7 +177,9 @@ export default function AssignJobModal({
               >
                 {loading ? 'Saving…' : 'Add to pipeline'}
               </button>
+
             </div>
+
           </form>
         </div>
       </div>
