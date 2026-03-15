@@ -23,7 +23,8 @@ export default function AddCandidateModal() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('candidates').insert([{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from('candidates') as any).insert([{
       ...form,
       tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       created_by: user!.id
