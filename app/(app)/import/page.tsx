@@ -80,7 +80,7 @@ export default function ImportPage() {
     let inserted = 0
     for (let i = 0; i < records.length; i += 100) {
       const chunk = records.slice(i, i + 100)
-      const { data } = await supabase.from('candidates').insert(chunk).select('id')
+      const { data } = await (supabase.from('candidates') as any).insert(chunk).select('id')
       inserted += data?.length ?? 0
     }
     setImportedCount(inserted)
