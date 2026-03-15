@@ -63,7 +63,7 @@ export default function KanbanBoard({
     const newStage = STAGES[newIdx]
     setMoving(row.id)
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, stage: newStage } : r))
-    await supabase.from('pipeline').update({ stage: newStage }).eq('id', row.id)
+    await (supabase.from('pipeline') as any).update({ stage: newStage }).eq('id', row.id)
     await (supabase.from('activities') as any).insert({
       candidate_id: row.candidates!.id,
       job_id: jobId,
