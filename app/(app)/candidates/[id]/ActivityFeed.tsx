@@ -67,7 +67,7 @@ export default function ActivityFeed({
 
   async function logActivity(type: Activity['type'], content?: string) {
     setSaving(true)
-    await supabase.from('activities').insert({
+    await (supabase.from('activities') as any).insert({
       candidate_id: candidateId,
       type,
       content: content ?? activityLabel[type] ?? type,
