@@ -40,7 +40,7 @@ export default function ActivityFeed({
 
   useEffect(() => {
     loadActivities()
-    // Realtime subscription — all recruiters see updates live
+
     const channel = supabase
       .channel(`activities-${candidateId}`)
       .on('postgres_changes', {
@@ -52,6 +52,7 @@ export default function ActivityFeed({
         setActivities(prev => [payload.new as Activity, ...prev])
       })
       .subscribe()
+
     return () => { supabase.removeChannel(channel) }
   }, [candidateId])
 
@@ -62,18 +63,25 @@ export default function ActivityFeed({
       .eq('candidate_id', candidateId)
       .order('created_at', { ascending: false })
       .limit(50)
+
     setActivities(data ?? [])
   }
 
   async function logActivity(type: Activity['type'], content?: string) {
     setSaving(true)
-    await supabase.from('activities').insert({
+
+    const payload = {
       candidate_id: candidateId,
       type,
       content: content ?? activityLabel[type] ?? type,
       created_by: currentProfile.id,
       created_by_name: currentProfile.full_name,
-    })
+    }
+
+    await supabase
+      .from('activities')
+      .insert(payload as any)
+
     setSaving(false)
   }
 
@@ -93,7 +101,6 @@ export default function ActivityFeed({
         <h2 className="text-sm font-semibold text-gray-800">Activity & notes</h2>
       </div>
 
-      {/* Quick action buttons */}
       <div className="px-4 py-3 border-b border-gray-50">
         <p className="text-xs text-gray-400 mb-2">Log interaction</p>
         <div className="flex flex-wrap gap-1.5">
@@ -110,7 +117,6 @@ export default function ActivityFeed({
         </div>
       </div>
 
-      {/* Note input */}
       <div className="px-4 py-3 border-b border-gray-100">
         <textarea
           ref={textareaRef}
@@ -132,21 +138,23 @@ export default function ActivityFeed({
         </div>
       </div>
 
-      {/* Feed */}
       <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
         {activities.length === 0 && (
           <p className="px-4 py-8 text-sm text-gray-400 text-center">No activity yet</p>
         )}
+
         {activities.map(a => (
           <div key={a.id} className="px-4 py-3 flex gap-3">
             <span className="text-base flex-shrink-0 mt-0.5" style={{ fontSize: 14 }}>
               {activityIcon[a.type] ?? '•'}
             </span>
+
             <div className="flex-1 min-w-0">
               {a.type === 'note'
                 ? <p className="text-sm text-gray-700 whitespace-pre-wrap">{a.content}</p>
                 : <p className="text-sm text-gray-600">{a.content}</p>
               }
+
               <p className="text-xs text-gray-400 mt-1">
                 {a.created_by_name} · {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
               </p>
