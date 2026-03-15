@@ -50,21 +50,23 @@ export default function AddCompanyModal() {
           notes: form.notes || null,
           created_by: user!.id,
         },
-      ])
+      ] as any)
       .select()
       .single()
 
     if (company && form.contact_name) {
-      await supabase.from('company_contacts').insert([
-        {
-          company_id: company.id,
-          name: form.contact_name,
-          title: form.contact_title || null,
-          email: form.contact_email || null,
-          phone: form.contact_phone || null,
-          linkedin: form.contact_linkedin || null,
-        },
-      ])
+      await supabase
+        .from('company_contacts')
+        .insert([
+          {
+            company_id: company.id,
+            name: form.contact_name,
+            title: form.contact_title || null,
+            email: form.contact_email || null,
+            phone: form.contact_phone || null,
+            linkedin: form.contact_linkedin || null,
+          },
+        ] as any)
     }
 
     setLoading(false)
@@ -105,6 +107,7 @@ export default function AddCompanyModal() {
 
           <form onSubmit={submit} className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-3">
+
               <div className="col-span-2">
                 <label className="label">Company name *</label>
                 <input
@@ -145,14 +148,17 @@ export default function AddCompanyModal() {
                   onChange={set('website')}
                 />
               </div>
+
             </div>
 
             <div className="border-t border-gray-100 pt-4">
+
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                 Primary contact (optional)
               </p>
 
               <div className="grid grid-cols-2 gap-3">
+
                 <div>
                   <label className="label">Name</label>
                   <input
@@ -189,10 +195,13 @@ export default function AddCompanyModal() {
                     onChange={set('contact_phone')}
                   />
                 </div>
+
               </div>
+
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
+
               <button
                 type="button"
                 className="btn"
@@ -208,7 +217,9 @@ export default function AddCompanyModal() {
               >
                 {loading ? 'Saving…' : 'Save company'}
               </button>
+
             </div>
+
           </form>
         </div>
       </div>
