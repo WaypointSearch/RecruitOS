@@ -27,7 +27,7 @@ export default function AddCandidateModal() {
       ...form,
       tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       created_by: user!.id
-    })
+    }])
     setLoading(false)
     setOpen(false)
     setForm({ name:'',email:'',phone:'',linkedin:'',current_title:'',current_company:'',
