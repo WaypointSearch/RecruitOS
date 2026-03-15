@@ -32,7 +32,7 @@ export default function AssignJobModal({
     e.preventDefault()
     if (!jobId) { setError('Please select a job'); return }
     setLoading(true)
-    const { error: err } = await supabase.from('pipeline').insert({
+    const { error: err } = await supabase.from('pipeline').insert([{
       candidate_id: candidateId,
       job_id: jobId,
       stage,
@@ -45,7 +45,7 @@ export default function AssignJobModal({
     }
     // Log activity
     const job = jobs.find(j => j.id === jobId)
-    await supabase.from('activities').insert({
+    await supabase.from('activities').insert([{
       candidate_id: candidateId,
       job_id: jobId,
       type: 'stage_change',

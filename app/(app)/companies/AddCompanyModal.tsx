@@ -20,14 +20,14 @@ export default function AddCompanyModal() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: company } = await supabase.from('companies').insert({
+    const { data: company } = await supabase.from('companies').insert([{
       name: form.name, status: form.status as 'Prospect' | 'Client',
       website: form.website || null, industry: form.industry || null,
       notes: form.notes || null, created_by: user!.id,
     }).select().single()
 
     if (company && form.contact_name) {
-      await supabase.from('company_contacts').insert({
+      await supabase.from('company_contacts').insert([{
         company_id: company.id, name: form.contact_name,
         title: form.contact_title || null, email: form.contact_email || null,
         phone: form.contact_phone || null, linkedin: form.contact_linkedin || null,

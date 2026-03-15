@@ -27,7 +27,7 @@ export default function AddJobModal({
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('jobs').insert({
+    await supabase.from('jobs').insert([{
       title: form.title,
       description: form.description || null,
       salary_min: form.salary_min ? parseInt(form.salary_min) : null,
