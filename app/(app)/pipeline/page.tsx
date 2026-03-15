@@ -14,7 +14,7 @@ export default async function PipelineIndexPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-xl font-semibold text-gray-900 mb-5">Pipeline — All Active Jobs</h1>
       <div className="space-y-3">
-        {jobs?.map(j => {
+        {jobs?.map((j: any) => {
           const pipeline = (j.pipeline as any[]) ?? []
           const stageCounts = pipeline.reduce((acc: Record<string, number>, p) => {
             acc[p.stage] = (acc[p.stage] || 0) + 1; return acc

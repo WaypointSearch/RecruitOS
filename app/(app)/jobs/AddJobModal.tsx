@@ -64,7 +64,7 @@ export default function AddJobModal({
               <label className="label">Client company *</label>
               <select className="input" required value={form.company_id} onChange={set('company_id')}>
                 <option value="">Select client…</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             {filteredContacts.length > 0 && (
@@ -72,7 +72,7 @@ export default function AddJobModal({
                 <label className="label">Company contact</label>
                 <select className="input" value={form.contact_id} onChange={set('contact_id')}>
                   <option value="">Select contact…</option>
-                  {filteredContacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {filteredContacts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             )}

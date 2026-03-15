@@ -19,7 +19,7 @@ export default async function CandidatesPage({
   const { data: allCandidates } = await supabase.from('candidates').select('tags')
   const allTags = [...new Set((allCandidates ?? []).flatMap(c => c.tags ?? []))].sort()
 
-  const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
   const avatarColors = ['bg-blue-100 text-blue-700', 'bg-teal-100 text-teal-700',
     'bg-amber-100 text-amber-700', 'bg-purple-100 text-purple-700', 'bg-rose-100 text-rose-700']
 

@@ -69,7 +69,7 @@ export default function ImportPage() {
         if (crmField === '__skip__' || !crmField) return
         const val = row[csvCol]?.trim()
         if (!val) return
-        if (crmField === 'tags') rec.tags = val.split(',').map(t => t.trim()).filter(Boolean)
+        if (crmField === 'tags') rec.tags = val.split(',').map((t: string) => t.trim()).filter(Boolean)
         else rec[crmField] = val
       })
       if (!rec.tags) rec.tags = []

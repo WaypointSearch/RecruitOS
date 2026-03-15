@@ -75,7 +75,7 @@ export default function KanbanBoard({
     setMoving(null)
   }
 
-  const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
 
   return (
     <div className="flex gap-3 overflow-x-auto p-4 flex-1 items-start">

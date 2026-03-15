@@ -52,7 +52,7 @@ export default async function DashboardPage() {
           { label: 'Total candidates', value: candidateCount ?? 0 },
           { label: 'Active jobs', value: jobCount ?? 0 },
           { label: 'Client companies', value: clientCount ?? 0 },
-        ].map(m => (
+        ].map((m: any) => (
           <div key={m.label} className="card p-4">
             <p className="text-xs text-gray-500 mb-1">{m.label}</p>
             <p className="text-3xl font-semibold text-gray-900">{m.value}</p>
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
             {recentActivity?.length === 0 && (
               <p className="px-4 py-6 text-sm text-gray-400 text-center">No activity yet</p>
             )}
-            {recentActivity?.map(a => (
+            {recentActivity?.map((a: any) => (
               <div key={a.id} className="px-4 py-3 flex items-start gap-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -94,7 +94,7 @@ export default async function DashboardPage() {
             {hotPipeline?.length === 0 && (
               <p className="px-4 py-6 text-sm text-gray-400 text-center">No active pipeline yet</p>
             )}
-            {hotPipeline?.map(p => (
+            {hotPipeline?.map((p: any) => (
               <div key={p.id} className="px-4 py-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800">{(p.candidates as any)?.name}</p>

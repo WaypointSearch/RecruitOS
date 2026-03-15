@@ -137,7 +137,7 @@ export default function ActivityFeed({
         {activities.length === 0 && (
           <p className="px-4 py-8 text-sm text-gray-400 text-center">No activity yet</p>
         )}
-        {activities.map(a => (
+        {activities.map((a: any) => (
           <div key={a.id} className="px-4 py-3 flex gap-3">
             <span className="text-base flex-shrink-0 mt-0.5" style={{ fontSize: 14 }}>
               {activityIcon[a.type] ?? '•'}

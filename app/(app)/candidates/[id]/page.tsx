@@ -101,7 +101,7 @@ export default async function CandidateProfilePage({ params }: { params: { id: s
               ? <p className="text-sm text-gray-400">Not assigned to any jobs yet.</p>
               : (
                 <div className="space-y-2">
-                  {pipeline?.map(p => (
+                  {pipeline?.map((p: any) => (
                     <div key={p.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
                       <div className="flex-1">
                         <Link href={`/pipeline/${p.jobs?.id}`} className="text-sm font-medium text-gray-800 hover:text-blue-600">

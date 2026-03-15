@@ -39,10 +39,10 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
           <h2 className="text-sm font-semibold text-gray-800 mb-3">Contacts ({contacts?.length ?? 0})</h2>
           {contacts?.length === 0
             ? <p className="text-sm text-gray-400">No contacts yet.</p>
-            : contacts?.map(c => (
+            : contacts?.map((c: any) => (
               <div key={c.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
                 <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                  {c.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                  {c.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-800">{c.name}</p>
@@ -65,7 +65,7 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
           </div>
           {jobs?.length === 0
             ? <p className="text-sm text-gray-400">No job orders yet.</p>
-            : jobs?.map(j => (
+            : jobs?.map((j: any) => (
               <Link key={j.id} href={`/pipeline/${j.id}`}
                 className="block py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors">
                 <div className="flex items-center justify-between">

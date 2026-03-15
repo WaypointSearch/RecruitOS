@@ -32,7 +32,7 @@ export default async function JobsPage() {
             No job orders yet. Add your first one above.
           </div>
         )}
-        {jobs?.map(j => (
+        {jobs?.map((j: any) => (
           <Link key={j.id} href={`/pipeline/${j.id}`}
             className="card p-4 hover:border-blue-200 hover:shadow transition-all block">
             <div className="flex items-start justify-between mb-2">

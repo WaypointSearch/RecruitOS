@@ -26,7 +26,7 @@ export default function AddCandidateModal() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from('candidates') as any).insert([{
       ...form,
-      tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
       created_by: user!.id
     }])
     setLoading(false)

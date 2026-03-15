@@ -60,7 +60,7 @@ export default function UserManagement({
     router.refresh()
   }
 
-  const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'
+  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?'
 
   return (
     <div className="space-y-6">
@@ -101,7 +101,7 @@ export default function UserManagement({
           <h2 className="text-sm font-semibold text-gray-800">Team members ({users.length})</h2>
         </div>
         <div className="divide-y divide-gray-50">
-          {users.map(u => (
+          {users.map((u: any) => (
             <div key={u.id} className="flex items-center gap-4 px-5 py-3.5">
               <div className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0
                 ${u.is_locked ? 'bg-red-100 text-red-400' : 'bg-blue-100 text-blue-700'}`}>

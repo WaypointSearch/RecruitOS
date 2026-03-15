@@ -79,7 +79,7 @@ export default function AssignJobModal({
               <label className="label">Job order *</label>
               <select className="input" value={jobId} onChange={e => setJobId(e.target.value)} required>
                 <option value="">Select a job…</option>
-                {jobs.map(j => (
+                {jobs.map((j: any) => (
                   <option key={j.id} value={j.id}>{j.title} — {j.companies?.name}</option>
                 ))}
               </select>
