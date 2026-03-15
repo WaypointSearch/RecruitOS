@@ -22,17 +22,43 @@ export default function AddCandidateModal() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('candidates').insert([{
+
+    if (!user) {
+      alert('You must be logged in')
+      setLoading(false)
+      return
+    }
+
+    const payload = {
       ...form,
       tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      created_by: user!.id
-    })
+      created_by: user.id
+    }
+
+    const { error } = await supabase
+      .from('candidates')
+      .insert(payload as any)
+
+    if (error) {
+      console.error(error)
+      alert('Failed to save candidate')
+      setLoading(false)
+      return
+    }
+
     setLoading(false)
     setOpen(false)
-    setForm({ name:'',email:'',phone:'',linkedin:'',current_title:'',current_company:'',
-      current_company_url:'',time_in_current_role:'',previous_title:'',previous_company:'',
-      previous_dates:'',tags:'',source_list:'' })
+
+    setForm({
+      name:'',email:'',phone:'',linkedin:'',
+      current_title:'',current_company:'',
+      current_company_url:'',time_in_current_role:'',
+      previous_title:'',previous_company:'',
+      previous_dates:'',tags:'',source_list:''
+    })
+
     router.refresh()
   }
 
