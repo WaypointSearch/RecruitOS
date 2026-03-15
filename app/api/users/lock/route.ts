@@ -1,0 +1,32 @@
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createAdminClient } from '@/lib/supabase'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+
+export async function POST(req: Request) {
+  const supabase = createServerComponentClient({ cookies })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('profiles').select('role').eq('id', session.user.id).single()
+  if (!profile || profile.role !== 'admin')
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+
+  const { userId, locked } = await req.json()
+  if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
+
+  // Prevent locking yourself
+  if (userId === session.user.id)
+    return NextResponse.json({ error: 'Cannot lock your own account' }, { status: 400 })
+
+  const admin = createAdminClient()
+
+  // Update profile lock flag
+  await admin.from('profiles').update({ is_locked: locked }).eq('id', userId)
+
+  // Also ban/unban at the auth level so their token is immediately invalidated
+  await admin.auth.admin.updateUserById(userId, { ban_duration: locked ? '876000h' : 'none' })
+
+  return NextResponse.json({ success: true })
+}
