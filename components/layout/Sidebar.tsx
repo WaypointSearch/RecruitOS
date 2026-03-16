@@ -19,7 +19,7 @@ export default function Sidebar() {
   const supabase = createClientComponentClient()
   const [user, setUser] = useState<any>(null)
   const [role, setRole] = useState('user')
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggle: toggleTheme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
