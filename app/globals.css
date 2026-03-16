@@ -3,63 +3,69 @@
 @tailwind utilities;
 
 /* ========================================
-   CSS Variables — Light / Dark
+   macOS-inspired CSS Variables
    ======================================== */
 :root,
 html[data-theme="light"] {
-  --bg: #f5f5f7;
+  --bg: #f0f0f3;
   --card-bg: #ffffff;
-  --card-bg-hover: #fafafa;
-  --border: #e5e5e5;
-  --border-light: #f0f0f0;
-  --text-primary: #1d1d1f;
-  --text-secondary: #6e6e73;
-  --text-tertiary: #aeaeb2;
-  --accent: #0071e3;
-  --accent-bg: #e8f2ff;
+  --card-bg-hover: #f7f7fa;
+  --border: #d8d8dc;
+  --border-light: #ededf0;
+  --text-primary: #1a1a1e;
+  --text-secondary: #5c5c66;
+  --text-tertiary: #9d9da6;
+  --accent: #007aff;
+  --accent-hover: #0062cc;
+  --accent-bg: #e5f0ff;
   --accent-text: #0055b3;
   --danger: #ff3b30;
-  --danger-bg: #fff0f0;
-  --success: #34c759;
-  --success-bg: #ecfdf3;
+  --danger-bg: #fff0ef;
+  --success: #30d158;
+  --success-bg: #e6f9ed;
   --warning: #ff9f0a;
-  --warning-bg: #fff8ec;
-  --sidebar-bg: #f8f8fa;
-  --sidebar-active: #e8e8ec;
+  --warning-bg: #fff7e6;
+  --sidebar-bg: rgba(246,246,249,0.92);
+  --sidebar-active: rgba(0,122,255,0.1);
+  --sidebar-active-text: #007aff;
   --input-bg: #ffffff;
-  --input-border: #d2d2d7;
-  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
-  --modal-overlay: rgba(0,0,0,0.3);
-  --kanban-bg: #f0f0f2;
+  --input-border: #c7c7cc;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.1);
+  --modal-overlay: rgba(0,0,0,0.35);
+  --kanban-bg: #e8e8ed;
 }
 
 html[data-theme="dark"] {
-  --bg: #161618;
-  --card-bg: #1e1e20;
-  --card-bg-hover: #252528;
-  --border: #2c2c2e;
-  --border-light: #232326;
-  --text-primary: #f5f5f7;
-  --text-secondary: #a1a1a6;
+  --bg: #1c1c1e;
+  --card-bg: #2c2c2e;
+  --card-bg-hover: #363638;
+  --border: #3a3a3c;
+  --border-light: #333335;
+  --text-primary: #f2f2f7;
+  --text-secondary: #aeaeb2;
   --text-tertiary: #636366;
-  --accent: #64b5f6;
-  --accent-bg: #1a2733;
-  --accent-text: #90caf9;
-  --danger: #ff6b6b;
-  --danger-bg: #2d1f1f;
-  --success: #66d98e;
-  --success-bg: #1a2d1f;
-  --warning: #ffc107;
-  --warning-bg: #2d2a1a;
-  --sidebar-bg: #1a1a1c;
-  --sidebar-active: #2a2a2e;
-  --input-bg: #252528;
-  --input-border: #3a3a3e;
-  --shadow: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-bg: rgba(10,132,255,0.15);
+  --accent-text: #64b5f6;
+  --danger: #ff453a;
+  --danger-bg: rgba(255,69,58,0.15);
+  --success: #30d158;
+  --success-bg: rgba(48,209,88,0.15);
+  --warning: #ffd60a;
+  --warning-bg: rgba(255,214,10,0.15);
+  --sidebar-bg: rgba(28,28,30,0.95);
+  --sidebar-active: rgba(10,132,255,0.2);
+  --sidebar-active-text: #0a84ff;
+  --input-bg: #3a3a3c;
+  --input-border: #48484a;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow: 0 1px 4px rgba(0,0,0,0.25);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
   --modal-overlay: rgba(0,0,0,0.6);
-  --kanban-bg: #1a1a1c;
+  --kanban-bg: #242426;
 }
 
 /* ========================================
@@ -67,51 +73,66 @@ html[data-theme="dark"] {
    ======================================== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-  background: var(--bg);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
+html, body {
+  height: 100%;
   overflow-x: hidden;
 }
 
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* ========================================
-   Sidebar
+   Sidebar — macOS vibrancy style
    ======================================== */
 .sidebar {
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  width: 200px;
+  width: 210px;
   background: var(--sidebar-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   z-index: 100;
-  transition: transform 0.25s ease;
+  transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 7px 12px;
+  margin: 1px 6px;
+  border-radius: 7px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
-.sidebar-link:hover { background: var(--sidebar-active); color: var(--text-primary); }
-.sidebar-link.active { background: var(--sidebar-active); color: var(--text-primary); font-weight: 600; }
+.sidebar-link:hover { 
+  background: var(--card-bg-hover);
+  color: var(--text-primary);
+}
+.sidebar-link.active { 
+  background: var(--sidebar-active);
+  color: var(--sidebar-active-text);
+  font-weight: 600;
+}
 
 .sidebar-mobile-toggle {
   display: none;
   position: fixed;
-  top: 12px; left: 12px;
+  top: 10px; left: 10px;
   z-index: 200;
   width: 36px; height: 36px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--card-bg);
   color: var(--text-primary);
@@ -119,6 +140,7 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
 }
 
 .sidebar-overlay {
@@ -130,18 +152,18 @@ body {
 }
 
 /* ========================================
-   Main Content
+   Main Content — properly offset from sidebar
    ======================================== */
 .main-content {
-  margin-left: 200px;
+  margin-left: 210px;
   min-height: 100vh;
-  padding: 24px;
-  max-width: 100%;
+  padding: 28px 32px;
+  width: calc(100% - 210px);
   overflow-x: hidden;
 }
 
 /* ========================================
-   Cards & Containers
+   Cards — macOS window style
    ======================================== */
 .card {
   background: var(--card-bg);
@@ -156,17 +178,17 @@ body {
 table { width: 100%; border-collapse: collapse; }
 th {
   text-align: left;
-  padding: 10px 14px;
+  padding: 10px 16px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-tertiary);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
   background: var(--card-bg);
 }
 td {
-  padding: 10px 14px;
+  padding: 10px 16px;
   font-size: 13px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-light);
@@ -174,16 +196,16 @@ td {
 tr:hover td { background: var(--card-bg-hover); }
 
 /* ========================================
-   Badges
+   Badges — pill style
    ======================================== */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 100px;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 .badge-blue { background: var(--accent-bg); color: var(--accent-text); }
 .badge-green { background: var(--success-bg); color: var(--success); }
@@ -192,7 +214,7 @@ tr:hover td { background: var(--card-bg-hover); }
 .badge-yellow { background: var(--warning-bg); color: var(--warning); }
 
 /* ========================================
-   Buttons
+   Buttons — macOS style
    ======================================== */
 .btn {
   display: inline-flex;
@@ -206,17 +228,24 @@ tr:hover td { background: var(--card-bg-hover); }
   border: 1px solid var(--border);
   background: var(--card-bg);
   color: var(--text-primary);
-  transition: all 0.15s;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
-.btn:hover { background: var(--card-bg-hover); box-shadow: var(--shadow); }
-.btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
-.btn-primary:hover { opacity: 0.9; }
+.btn:hover { background: var(--card-bg-hover); box-shadow: var(--shadow-sm); }
+.btn:active { transform: scale(0.98); }
+.btn-primary { 
+  background: var(--accent); 
+  color: white; 
+  border-color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,122,255,0.3);
+}
+.btn-primary:hover { background: var(--accent-hover); }
 .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
 .btn-danger:hover { opacity: 0.9; }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
 
 /* ========================================
-   Inputs
+   Inputs — macOS style
    ======================================== */
 input[type="text"],
 input[type="email"],
@@ -236,15 +265,17 @@ select {
   color: var(--text-primary);
   width: 100%;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
 }
 input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
+::placeholder { color: var(--text-tertiary); }
 
 /* ========================================
-   Modals
+   Modals — macOS sheet style
    ======================================== */
 .modal-overlay {
   position: fixed;
@@ -255,18 +286,20 @@ input:focus, textarea:focus, select:focus {
   justify-content: center;
   z-index: 1000;
   padding: 16px;
+  animation: fadeIn 0.15s ease;
 }
 .modal-content {
   background: var(--card-bg);
   border-radius: 14px;
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: 520px;
+  max-height: 85vh;
   overflow-y: auto;
+  animation: slideUp 0.2s ease;
 }
 .modal-header {
-  padding: 16px 20px 12px;
+  padding: 18px 20px 14px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -274,26 +307,29 @@ input:focus, textarea:focus, select:focus {
 }
 .modal-body { padding: 16px 20px; }
 .modal-footer {
-  padding: 12px 20px 16px;
+  padding: 14px 20px 18px;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   border-top: 1px solid var(--border);
 }
 
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
 /* ========================================
    Kanban
    ======================================== */
 .kanban-wrapper {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   overflow-x: auto;
   padding-bottom: 16px;
   -webkit-overflow-scrolling: touch;
 }
 .kanban-col {
-  min-width: 240px;
-  max-width: 280px;
+  min-width: 230px;
+  max-width: 270px;
   flex-shrink: 0;
   background: var(--kanban-bg);
   border-radius: 10px;
@@ -302,44 +338,47 @@ input:focus, textarea:focus, select:focus {
 .kanban-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 10px 12px;
   margin-bottom: 8px;
-  box-shadow: var(--shadow);
-  transition: box-shadow 0.15s;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s, transform 0.1s;
 }
-.kanban-card:hover { box-shadow: var(--shadow-lg); }
+.kanban-card:hover { 
+  box-shadow: var(--shadow); 
+  transform: translateY(-1px);
+}
 
 /* ========================================
-   Candidate Profile — Responsive Grid
+   Candidate Profile Grid
    ======================================== */
 .candidate-profile-grid {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 1fr 300px;
   gap: 20px;
   max-width: 100%;
 }
 
 /* ========================================
-   Toast Notifications
+   Toast
    ======================================== */
 .toast {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  padding: 10px 16px;
-  border-radius: 8px;
+  bottom: 24px;
+  right: 24px;
+  padding: 10px 18px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
   color: white;
   z-index: 9999;
-  animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+  animation: toastIn 0.3s cubic-bezier(0.25,0.1,0.25,1), toastOut 0.3s ease 2.5s forwards;
   box-shadow: var(--shadow-lg);
 }
 .toast-success { background: var(--success); }
 .toast-error { background: var(--danger); }
 
-@keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes toastIn { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
 
 /* ========================================
@@ -364,96 +403,68 @@ input:focus, textarea:focus, select:focus {
 .confirm-dialog {
   background: var(--card-bg);
   border-radius: 14px;
-  padding: 24px;
+  padding: 28px;
   max-width: 380px;
   width: 100%;
   text-align: center;
   box-shadow: var(--shadow-lg);
+  animation: slideUp 0.2s ease;
 }
-.confirm-dialog h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-.confirm-dialog p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+.confirm-dialog h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+.confirm-dialog p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
 
 /* ========================================
-   MOBILE RESPONSIVE
+   Stats grid (dashboard)
    ======================================== */
-@media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.sidebar-open {
-    transform: translateX(0);
-  }
-  .sidebar-mobile-toggle {
-    display: flex;
-  }
-  .sidebar-overlay {
-    display: block;
-  }
-  .main-content {
-    margin-left: 0;
-    padding: 16px;
-    padding-top: 56px; /* space for hamburger */
-  }
-  .candidate-profile-grid {
-    grid-template-columns: 1fr;
-  }
-  .kanban-col {
-    min-width: 200px;
-  }
-  .modal-content {
-    max-width: 100%;
-    margin: 8px;
-    max-height: 85vh;
-  }
-
-  /* Stack stats cards */
-  .stats-grid {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
-  }
-
-  /* Table responsive */
-  table { font-size: 12px; }
-  th, td { padding: 8px 10px; }
-
-  /* Hide non-essential columns on mobile */
-  .hide-mobile { display: none; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
-
-@media (max-width: 480px) {
-  .stats-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .kanban-col {
-    min-width: 180px;
-  }
-  .main-content {
-    padding: 12px;
-    padding-top: 52px;
-  }
-}
-
-/* ========================================
-   Tablet adjustments
-   ======================================== */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .sidebar { width: 180px; }
-  .main-content { margin-left: 180px; padding: 20px; }
-  .candidate-profile-grid {
-    grid-template-columns: 1fr 240px;
-  }
-}
-
-/* ========================================
-   Scrollbar styling
-   ======================================== */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
 /* ========================================
    Utility
    ======================================== */
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+/* ========================================
+   Scrollbars — macOS style
+   ======================================== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 4px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); border: 2px solid transparent; background-clip: content-box; }
+
+/* ========================================
+   MOBILE RESPONSIVE
+   ======================================== */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.sidebar-open { transform: translateX(0); }
+  .sidebar-mobile-toggle { display: flex; }
+  .sidebar-overlay { display: block; }
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+    padding: 16px;
+    padding-top: 56px;
+  }
+  .candidate-profile-grid { grid-template-columns: 1fr; }
+  .kanban-col { min-width: 200px; }
+  .modal-content { max-width: 100%; margin: 8px; }
+  .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  table { font-size: 12px; }
+  th, td { padding: 8px 10px; }
+  .hide-mobile { display: none; }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr !important; }
+  .main-content { padding: 12px; padding-top: 52px; }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar { width: 190px; }
+  .main-content { margin-left: 190px; width: calc(100% - 190px); padding: 20px; }
+  .candidate-profile-grid { grid-template-columns: 1fr 260px; }
+}

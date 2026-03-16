@@ -1,271 +1,340 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { createSupabaseClient } from '@/lib/supabase'
+import { useEffect, useState, useRef } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Upload, MapPin, Search, Trash2, X, AlertTriangle, CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react'
-import AddCandidateModal from './AddCandidateModal'
-
-const PAGE_SIZES = [25, 50, 100, 250, 500]
 
 export default function CandidatesPage() {
+  const sb = useRef(createClientComponentClient()).current
+  const router = useRouter()
   const [candidates, setCandidates] = useState<any[]>([])
-  const [totalCount, setTotalCount] = useState(0)
   const [allTags, setAllTags] = useState<string[]>([])
   const [allLocations, setAllLocations] = useState<string[]>([])
-  const [q, setQ] = useState('')
+  const [search, setSearch] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [locationFilter, setLocationFilter] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [sortBy, setSortBy] = useState('name') // 'name' | 'last_contacted' | 'created_at'
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulkDeleting, setBulkDeleting] = useState(false)
-  const [confirmBulk, setConfirmBulk] = useState(false)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
-  const [page, setPage] = useState(0)
-  const supabase = createSupabaseClient()
+  const [toast, setToast] = useState<string | null>(null)
+  const [lastContacted, setLastContacted] = useState<Record<string, string>>({})
 
-  useEffect(() => { loadMeta() }, [])
-  useEffect(() => { setPage(0) }, [q, tagFilter, locationFilter, pageSize])
-  useEffect(() => { loadCandidates() }, [q, tagFilter, locationFilter, pageSize, page])
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
-  async function loadMeta() {
-    const { data } = await (supabase as any).from('candidates').select('tags, location')
-    const tags = Array.from(new Set((data ?? []).flatMap((c: any) => c.tags ?? []))).sort() as string[]
+  const load = async () => {
+    const { data } = await (sb as any).from('candidates').select('*').order('name')
+    setCandidates(data ?? [])
+
+    // Get unique tags and locations
+    const tags = Array.from(new Set((data ?? []).flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[]
     const locs = Array.from(new Set((data ?? []).map((c: any) => c.location).filter(Boolean))).sort() as string[]
     setAllTags(tags)
     setAllLocations(locs)
-  }
 
-  async function loadCandidates() {
-    setLoading(true)
-    const from = page * pageSize
-    const to = from + pageSize - 1
+    // Get last contacted for each candidate
+    const ids = (data ?? []).map((c: any) => c.id)
+    if (ids.length > 0) {
+      // Load most recent activity per candidate
+      const { data: acts } = await (sb as any)
+        .from('activities')
+        .select('candidate_id, created_at')
+        .in('candidate_id', ids)
+        .order('created_at', { ascending: false })
 
-    let query = (supabase as any).from('candidates').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to)
-
-    if (q) {
-      const qp = '%' + q + '%'
-      query = query.or('name.ilike.' + qp + ',current_title.ilike.' + qp + ',current_company.ilike.' + qp + ',email.ilike.' + qp + ',work_email.ilike.' + qp + ',location.ilike.' + qp)
+      if (acts) {
+        const map: Record<string, string> = {}
+        acts.forEach((a: any) => {
+          if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at
+        })
+        setLastContacted(map)
+      }
     }
-    if (tagFilter) query = query.contains('tags', [tagFilter])
-    if (locationFilter) query = query.ilike('location', '%' + locationFilter + '%')
-
-    const { data, count } = await query
-    setCandidates(data ?? [])
-    setTotalCount(count ?? 0)
-    setSelected(new Set())
-    setLoading(false)
   }
 
-  function toggleSelect(id: string) {
+  useEffect(() => { load() }, [])
+
+  // Multi-keyword search: splits on spaces, ALL keywords must match across any field
+  const filtered = candidates.filter((c: any) => {
+    const keywords = search.toLowerCase().trim().split(/\s+/).filter(Boolean)
+    if (keywords.length > 0) {
+      const searchable = [
+        c.name, c.current_title, c.current_company, c.location,
+        c.email, c.work_email, c.personal_email, c.previous_title,
+        c.previous_company, c.linkedin, ...(c.tags ?? [])
+      ].filter(Boolean).join(' ').toLowerCase()
+
+      const allMatch = keywords.every((kw: string) => searchable.includes(kw))
+      if (!allMatch) return false
+    }
+    if (tagFilter && !(c.tags ?? []).includes(tagFilter)) return false
+    if (locationFilter && c.location !== locationFilter) return false
+    return true
+  })
+
+  // Sort
+  const sorted = [...filtered].sort((a: any, b: any) => {
+    if (sortBy === 'last_contacted') {
+      const aDate = lastContacted[a.id] || ''
+      const bDate = lastContacted[b.id] || ''
+      return bDate.localeCompare(aDate) // most recent first
+    }
+    if (sortBy === 'created_at') {
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    }
+    return (a.name || '').localeCompare(b.name || '')
+  })
+
+  const totalPages = Math.ceil(sorted.length / pageSize)
+  const paginated = sorted.slice((page - 1) * pageSize, page * pageSize)
+
+  const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
   }
 
-  function toggleAll() {
-    if (selected.size === candidates.length) setSelected(new Set())
-    else setSelected(new Set(candidates.map((c: any) => c.id)))
+  const toggleAll = () => {
+    if (selected.size === paginated.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(paginated.map((c: any) => c.id)))
+    }
   }
 
-  async function bulkDelete() {
-    setBulkDeleting(true)
+  const bulkDelete = async () => {
     const ids = Array.from(selected)
     for (let i = 0; i < ids.length; i += 50) {
-      await (supabase as any).from('candidates').delete().in('id', ids.slice(i, i + 50))
+      await (sb as any).from('candidates').delete().in('id', ids.slice(i, i + 50))
     }
-    setBulkDeleting(false)
-    setConfirmBulk(false)
+    showToast(`Deleted ${ids.length} candidates`)
     setSelected(new Set())
-    loadCandidates()
-    loadMeta()
+    setConfirmBulkDelete(false)
+    load()
   }
 
-  const totalPages = Math.ceil(totalCount / pageSize)
-  const startNum = page * pageSize + 1
-  const endNum = Math.min(page * pageSize + candidates.length, totalCount)
+  const initials = (name: string) => name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?'
+  const colors = ['#007aff', '#30d158', '#ff9f0a', '#ff3b30', '#af52de', '#5856d6', '#ff2d55', '#00c7be']
+  const colorFor = (name: string) => colors[Math.abs((name || '').charCodeAt(0) + (name || '').length) % colors.length]
 
-  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-  const avColors = [['#e8f0fb','#0058b0'],['#eafaf0','#1a7a35'],['#fff5e0','#7d4800'],['#f3effe','#5c2d91'],['#fce8e8','#9b1a14']]
+  const formatLastContact = (id: string) => {
+    const d = lastContacted[id]
+    if (!d) return '—'
+    const diff = Date.now() - new Date(d).getTime()
+    const days = Math.floor(diff / 86400000)
+    if (days === 0) return 'Today'
+    if (days === 1) return 'Yesterday'
+    if (days < 7) return `${days}d ago`
+    if (days < 30) return `${Math.floor(days/7)}w ago`
+    return `${Math.floor(days/30)}mo ago`
+  }
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', background: 'var(--bg)', minHeight: '100vh' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>
-          Candidates
-          {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-4)', marginLeft: 6 }}>({totalCount.toLocaleString()})</span>}
+    <div>
+      {toast && <div className="toast toast-success">{toast}</div>}
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          Candidates <span style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-tertiary)' }}>({sorted.length})</span>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Link href="/import" className="btn btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Upload size={13} />Import CSV
-          </Link>
-          <AddCandidateModal />
+          <Link href="/import" className="btn btn-sm" style={{ textDecoration: 'none' }}>⬆ Import CSV</Link>
+          <Link href="/candidates/new" className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>+ Add Candidate</Link>
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div className="search-bar" style={{ flex: 1, minWidth: 200 }}>
-          <Search size={13} />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, title, company, email, location..." />
-          {q && <button onClick={() => setQ('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 0, display: 'flex' }}><X size={13} /></button>}
-        </div>
-        <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)} className="input" style={{ width: 160 }}>
+      {/* Search & Filters */}
+      <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          type="search"
+          placeholder="Search by keywords (e.g. mechanical new york)..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          style={{ flex: 1, minWidth: 200 }}
+        />
+        <select 
+          value={locationFilter} 
+          onChange={(e) => { setLocationFilter(e.target.value); setPage(1) }}
+          style={{ maxWidth: 170 }}
+        >
           <option value="">All locations</option>
           {allLocations.map((l: string) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="input" style={{ width: 140 }}>
+        <select 
+          value={tagFilter} 
+          onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
+          style={{ maxWidth: 150 }}
+        >
           <option value="">All tags</option>
           {allTags.map((t: string) => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(q || tagFilter || locationFilter) && (
-          <button className="btn btn-sm" onClick={() => { setQ(''); setTagFilter(''); setLocationFilter('') }}>Clear</button>
-        )}
+        <select 
+          value={sortBy} 
+          onChange={(e) => { setSortBy(e.target.value); setPage(1) }}
+          style={{ maxWidth: 160 }}
+        >
+          <option value="name">Sort: Name</option>
+          <option value="last_contacted">Sort: Last Contacted</option>
+          <option value="created_at">Sort: Date Added</option>
+        </select>
       </div>
 
-      {/* Bulk action bar */}
+      {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 10, marginBottom: 12 }}>
-          <CheckSquare size={15} style={{ color: 'var(--accent-text)' }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-text)' }}>{selected.size} selected</span>
-          <button className="btn btn-danger btn-sm" onClick={() => setConfirmBulk(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <Trash2 size={12} />Delete selected
-          </button>
-          <button className="btn btn-sm" onClick={() => setSelected(new Set())}>Deselect all</button>
-          <span style={{ fontSize: 12, color: 'var(--accent-text)', marginLeft: 'auto' }}>
-            Tip: select all {candidates.length} on this page, delete, then move to next page
+        <div className="card" style={{
+          padding: '10px 16px', marginBottom: 12,
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: 'var(--accent-bg)', borderColor: 'var(--accent)',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-text)' }}>
+            {selected.size} selected
           </span>
+          <button onClick={() => setConfirmBulkDelete(true)} className="btn btn-danger btn-sm">
+            Delete Selected
+          </button>
+          <button onClick={() => setSelected(new Set())} className="btn btn-sm">
+            Clear Selection
+          </button>
         </div>
       )}
 
-      {/* Bulk delete confirm */}
-      {confirmBulk && (
-        <>
-          <div className="modal-backdrop" onClick={() => setConfirmBulk(false)} />
-          <div className="modal-box">
-            <div className="modal-content" style={{ maxWidth: 420 }}>
-              <div className="modal-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-text)' }}>
-                  <AlertTriangle size={16} />
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>Delete {selected.size} candidates?</span>
-                </div>
-                <button onClick={() => setConfirmBulk(false)} className="btn btn-sm"><X size={14} /></button>
-              </div>
-              <div className="modal-body">
-                <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                  Permanently deletes {selected.size} candidate{selected.size !== 1 ? 's' : ''} and all their notes and pipeline history.{' '}
-                  <strong style={{ color: 'var(--red-text)' }}>Cannot be undone.</strong>
-                </p>
-              </div>
-              <div className="modal-footer">
-                <button className="btn" onClick={() => setConfirmBulk(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={bulkDelete} disabled={bulkDeleting}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Trash2 size={13} />{bulkDeleting ? 'Deleting...' : 'Yes, delete ' + selected.size}
-                </button>
-              </div>
+      {/* Confirm bulk delete */}
+      {confirmBulkDelete && (
+        <div className="modal-overlay">
+          <div className="confirm-dialog">
+            <h3>Delete {selected.size} Candidates?</h3>
+            <p>This action cannot be undone. All selected candidates and their activity history will be permanently removed.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button onClick={bulkDelete} className="btn btn-danger">Yes, Delete All</button>
+              <button onClick={() => setConfirmBulkDelete(false)} className="btn">Cancel</button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* Table */}
-      <div className="mac-card" style={{ overflow: 'hidden' }}>
-        <table className="mac-table">
-          <thead>
-            <tr>
-              <th style={{ width: 40 }}>
-                <input type="checkbox"
-                  checked={candidates.length > 0 && selected.size === candidates.length}
-                  onChange={toggleAll}
-                  style={{ cursor: 'pointer', accentColor: 'var(--accent)', width: 14, height: 14 }} />
-              </th>
-              {['Name','Current role','Company','Location','Tags',''].map(h => <th key={h}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-4)', fontSize: 13 }}>Loading...</td></tr>}
-            {!loading && candidates.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-4)', fontSize: 13 }}>No candidates found.</td></tr>}
-            {candidates.map((c: any, i: number) => {
-              const [bg, fg] = avColors[i % avColors.length]
-              const isSelected = selected.has(c.id)
-              return (
-                <tr key={c.id} style={{ background: isSelected ? 'var(--accent-light)' : undefined }}>
-                  <td onClick={e => e.stopPropagation()} style={{ paddingRight: 0 }}>
-                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
-                      style={{ cursor: 'pointer', accentColor: 'var(--accent)', width: 14, height: 14 }} />
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={paginated.length > 0 && selected.size === paginated.length}
+                    onChange={toggleAll}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                </th>
+                <th>Name</th>
+                <th>Current Role</th>
+                <th className="hide-mobile">Company</th>
+                <th className="hide-mobile">Location</th>
+                <th>Last Contact</th>
+                <th style={{ width: 70 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.map((c: any) => (
+                <tr key={c.id} style={{ cursor: 'pointer' }}>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleSelect(c.id)}
+                      style={{ width: 16, height: 16, cursor: 'pointer' }}
+                    />
                   </td>
-                  <td>
+                  <td onClick={() => router.push(`/candidates/${c.id}`)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: bg, color: fg, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div className="avatar" style={{ background: colorFor(c.name), color: 'white' }}>
                         {initials(c.name)}
                       </div>
-                      <Link href={'/candidates/' + c.id} style={{ fontWeight: 600, color: 'var(--text)', textDecoration: 'none' }}>{c.name}</Link>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
                     </div>
                   </td>
-                  <td style={{ color: 'var(--text-2)' }}>{c.current_title || '—'}</td>
-                  <td style={{ color: 'var(--text-2)' }}>{c.current_company || '—'}</td>
-                  <td>
-                    {c.location
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-3)' }}><MapPin size={11} />{c.location}</span>
-                      : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  <td onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_title || '—'}</td>
+                  <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_company || '—'}</td>
+                  <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>
+                    {c.location ? (
+                      <span style={{ fontSize: 12 }}>📍 {c.location}</span>
+                    ) : '—'}
                   </td>
-                  <td><div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{(c.tags ?? []).map((t: string) => <span key={t} className="badge badge-gray">{t}</span>)}</div></td>
-                  <td style={{ textAlign: 'right' }}>
-                    <Link href={'/candidates/' + c.id} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View →</Link>
+                  <td onClick={() => router.push(`/candidates/${c.id}`)}>
+                    <span style={{ 
+                      fontSize: 12, 
+                      color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+                      fontWeight: lastContacted[c.id] ? 500 : 400,
+                    }}>
+                      {formatLastContact(c.id)}
+                    </span>
+                  </td>
+                  <td>
+                    <Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
+                      View →
+                    </Link>
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 10 }}>
-
-        {/* Left: showing X–Y of Z */}
-        <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-          {loading ? 'Loading...' : totalCount === 0 ? 'No results' : `Showing ${startNum.toLocaleString()}–${endNum.toLocaleString()} of ${totalCount.toLocaleString()} candidates`}
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        {/* Center: page size selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-4)', fontWeight: 500 }}>Show</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {PAGE_SIZES.map(size => (
-              <button key={size} onClick={() => setPageSize(size)}
-                style={{
-                  padding: '4px 10px', borderRadius: 100, fontSize: 12, fontWeight: 500,
-                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                  background: pageSize === size ? 'var(--accent)' : 'var(--surface)',
-                  color: pageSize === size ? 'white' : 'var(--text-3)',
-                  border: pageSize === size ? '1px solid var(--accent)' : '1px solid var(--border)',
-                }}>
-                {size}
+        {paginated.length === 0 && (
+          <div style={{ padding: 40, textAlign: 'center' }}>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 14 }}>
+              {search || tagFilter || locationFilter ? 'No candidates match your filters' : 'No candidates yet — import a CSV or add one manually'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {sorted.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Showing {((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}
+          </span>
+
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {[25, 50, 100, 250, 500].map((s) => (
+              <button
+                key={s}
+                onClick={() => { setPageSize(s); setPage(1) }}
+                className={`btn btn-sm ${pageSize === s ? 'btn-primary' : ''}`}
+                style={{ padding: '3px 8px', fontSize: 11 }}
+              >
+                {s}
               </button>
             ))}
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 4 }}>per page</span>
           </div>
-          <span style={{ fontSize: 12, color: 'var(--text-4)', fontWeight: 500 }}>per page</span>
-        </div>
 
-        {/* Right: prev/next */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0 || loading}
-            className="btn btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px' }}>
-            <ChevronLeft size={14} />Prev
-          </button>
-          <span style={{ fontSize: 13, color: 'var(--text-3)', minWidth: 80, textAlign: 'center' }}>
-            {totalPages > 0 ? `Page ${page + 1} of ${totalPages}` : '—'}
-          </span>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1 || loading}
-            className="btn btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px' }}>
-            Next<ChevronRight size={14} />
-          </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+              className="btn btn-sm"
+            >
+              ← Prev
+            </button>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              Page {page} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page >= totalPages}
+              className="btn btn-sm"
+            >
+              Next →
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

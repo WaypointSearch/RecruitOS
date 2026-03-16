@@ -1,110 +1,139 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { formatDistanceToNow } from 'date-fns'
+'use client'
+import { useEffect, useState, useRef } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import Link from 'next/link'
 
-export default async function DashboardPage() {
-  const supabase = createServerComponentClient({ cookies })
+export default function DashboardPage() {
+  const sb = useRef(createClientComponentClient()).current
+  const [stats, setStats] = useState({ candidates: 0, jobs: 0, companies: 0, pipeline: 0 })
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [hotPipeline, setHotPipeline] = useState<any[]>([])
 
-  const [
-    { count: candidateCount },
-    { count: jobCount },
-    { count: clientCount },
-    { data: recentActivity },
-    { data: hotPipeline },
-  ] = await Promise.all([
-    supabase.from('candidates').select('*', { count: 'exact', head: true }),
-    supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
-    supabase.from('companies').select('*', { count: 'exact', head: true }).eq('status', 'Client'),
-    supabase.from('activities').select('*, candidates(name)').order('created_at', { ascending: false }).limit(8),
-    supabase.from('pipeline')
-      .select('*, candidates(name, current_title, current_company), jobs(title, companies(name))')
-      .in('stage', ['Interview Scheduled', 'Offer Extended', 'Offer Accepted', 'Interview Requested'])
-      .order('added_at', { ascending: false }).limit(6),
-  ])
+  useEffect(() => {
+    ;(async () => {
+      const { count: cCount } = await (sb as any).from('candidates').select('id', { count: 'exact', head: true })
+      const { count: jCount } = await (sb as any).from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Active')
+      const { count: coCount } = await (sb as any).from('companies').select('id', { count: 'exact', head: true }).eq('status', 'Client')
+      const { count: pCount } = await (sb as any).from('pipeline').select('id', { count: 'exact', head: true })
 
-  const activityLabel = (type: string, content: string | null) => {
-    const map: Record<string, string> = {
-      note: content ? `Note: "${content.slice(0, 60)}${content.length > 60 ? '…' : ''}"` : 'Note added',
-      called: 'Talked to candidate',
-      voicemail: 'Left voicemail',
-      emailed: 'Sent email',
-      linkedin: 'Sent LinkedIn message',
-      texted: 'Sent text',
-      stage_change: content || 'Stage updated',
-      added: 'Added to CRM',
-    }
-    return map[type] || type
-  }
+      setStats({
+        candidates: cCount || 0,
+        jobs: jCount || 0,
+        companies: coCount || 0,
+        pipeline: pCount || 0,
+      })
 
-  const stageColor = (stage: string) => {
-    if (['Offer Accepted', 'Started - Send Invoice'].includes(stage)) return 'badge-green'
-    if (['Offer Extended'].includes(stage)) return 'badge-blue'
-    if (['Interview Scheduled', 'Interview Requested'].includes(stage)) return 'badge-amber'
-    return 'badge-gray'
+      const { data: acts } = await (sb as any)
+        .from('activities')
+        .select('*, candidates(name)')
+        .order('created_at', { ascending: false })
+        .limit(8)
+      setRecentActivity(acts ?? [])
+
+      const { data: pipes } = await (sb as any)
+        .from('pipeline')
+        .select('*, candidates(name, current_salary), jobs(title)')
+        .order('moved_at', { ascending: false })
+        .limit(6)
+      setHotPipeline(pipes ?? [])
+    })()
+  }, [])
+
+  const statCards = [
+    { label: 'Candidates', value: stats.candidates, icon: '◉', color: 'var(--accent)' },
+    { label: 'Active Jobs', value: stats.jobs, icon: '◈', color: 'var(--success)' },
+    { label: 'Client Companies', value: stats.companies, icon: '◫', color: 'var(--warning)' },
+    { label: 'In Pipeline', value: stats.pipeline, icon: '◆', color: '#af52de' },
+  ]
+
+  const timeAgo = (d: string) => {
+    const diff = Date.now() - new Date(d).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-xl font-semibold text-gray-900 mb-6">Dashboard</h1>
+    <div>
+      <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 20 }}>Dashboard</h1>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          { label: 'Total candidates', value: candidateCount ?? 0 },
-          { label: 'Active jobs', value: jobCount ?? 0 },
-          { label: 'Client companies', value: clientCount ?? 0 },
-        ].map(m => (
-          <div key={m.label} className="card p-4">
-            <p className="text-xs text-gray-500 mb-1">{m.label}</p>
-            <p className="text-3xl font-semibold text-gray-900">{m.value}</p>
+      {/* Stats */}
+      <div className="stats-grid" style={{ marginBottom: 24 }}>
+        {statCards.map((s) => (
+          <div key={s.label} className="card" style={{ padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {s.label}
+              </span>
+              <span style={{ fontSize: 18, color: s.color }}>{s.icon}</span>
+            </div>
+            <p style={{ fontSize: 32, fontWeight: 700, marginTop: 6, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+              {s.value}
+            </p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
-        <div className="card">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-800">Recent activity</h2>
+      {/* Two column grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="stats-grid">
+        {/* Recent Activity */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Recent Activity</h2>
           </div>
-          <div className="divide-y divide-gray-50">
-            {recentActivity?.length === 0 && (
-              <p className="px-4 py-6 text-sm text-gray-400 text-center">No activity yet</p>
+          <div style={{ padding: '8px 0', maxHeight: 340, overflowY: 'auto' }}>
+            {recentActivity.length === 0 && (
+              <p style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>No recent activity</p>
             )}
-            {recentActivity?.map(a => (
-              <div key={a.id} className="px-4 py-3 flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700">
-                    <span className="font-medium">{(a.candidates as any)?.name}</span>
-                    {' — '}{activityLabel(a.type, a.content)}
+            {recentActivity.map((a: any) => (
+              <div key={a.id} style={{ padding: '8px 18px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--accent)', marginTop: 6, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                    <strong>{a.created_by_name}</strong> — {a.type === 'note' ? `Note: "${(a.content || '').slice(0, 60)}"` : a.type === 'stage_change' ? a.content : a.type}
+                    {a.candidates?.name && (
+                      <span style={{ color: 'var(--text-secondary)' }}> on {a.candidates.name}</span>
+                    )}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {a.created_by_name} · {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{timeAgo(a.created_at)}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="card">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-800">Hot pipeline</h2>
+        {/* Hot Pipeline */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Hot Pipeline</h2>
           </div>
-          <div className="divide-y divide-gray-50">
-            {hotPipeline?.length === 0 && (
-              <p className="px-4 py-6 text-sm text-gray-400 text-center">No active pipeline yet</p>
+          <div style={{ padding: '8px 0', maxHeight: 340, overflowY: 'auto' }}>
+            {hotPipeline.length === 0 && (
+              <p style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>No active pipeline yet</p>
             )}
-            {hotPipeline?.map(p => (
-              <div key={p.id} className="px-4 py-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{(p.candidates as any)?.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {(p.jobs as any)?.title} · {(p.jobs as any)?.companies?.name}
-                  </p>
-                </div>
-                <span className={`badge ${stageColor(p.stage)}`}>{p.stage}</span>
-              </div>
-            ))}
+            {hotPipeline.map((p: any) => {
+              const commission = p.candidates?.current_salary ? Math.round(p.candidates.current_salary * 0.2) : null
+              return (
+                <Link key={p.id} href={`/pipeline/${p.job_id}`} style={{ textDecoration: 'none', display: 'block', padding: '8px 18px' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--card-bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{p.candidates?.name}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.jobs?.title}</p>
+                    </div>
+                    <span className="badge badge-blue" style={{ fontSize: 10 }}>{p.stage}</span>
+                    {commission && (
+                      <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>
+                        ${(commission/1000).toFixed(0)}k
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       </div>
