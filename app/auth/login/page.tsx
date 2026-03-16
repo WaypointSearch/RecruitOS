@@ -19,7 +19,7 @@ export default function LoginPage() {
     if (authError) { setError(authError.message); setLoading(false); return }
 
     // Check if account is locked
-    const { data: profile } = await supabase
+    const { data: profile } = await (supabase as any)
       .from('profiles').select('is_locked').eq('id', data.user!.id).single()
     if (profile?.is_locked) {
       await supabase.auth.signOut()
