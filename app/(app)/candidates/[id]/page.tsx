@@ -47,11 +47,11 @@ export default async function CandidateProfilePage({ params }: { params: { id: s
   }
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '14px 16px', maxWidth: '100%' }}>
       <Link href="/candidates" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-3)', textDecoration: 'none', marginBottom: 16 }}>
         <ArrowLeft size={14} /> Back to candidates
       </Link>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 260px', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="mac-card" style={{ padding: 20 }}>
             <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>

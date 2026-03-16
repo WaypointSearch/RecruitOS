@@ -60,7 +60,7 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
       setActivities(acts ?? [])
 
       // Load avatar urls for all unique creators
-      const creatorIds = Array.from(new Set((acts ?? []).map((a: any) => a.created_by).filter(Boolean)))
+      const creatorIds = [...new Set((acts ?? []).map((a: any) => a.created_by).filter(Boolean))]
       if (creatorIds.length > 0) {
         const { data: profiles } = await (supabase as any)
           .from('profiles').select('id, avatar_url').in('id', creatorIds)
@@ -101,8 +101,8 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
   }
 
   return (
-    <div className="mac-card" style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 120px)', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border)' }}>
+    <div className="mac-card" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)', overflow: 'hidden', position: 'sticky', top: 16 }}>
+      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Activity & Notes</div>
         {toast && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, background: 'var(--green-light)', color: 'var(--green-text)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
@@ -112,7 +112,7 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {QUICK_ACTIONS.map(({ label, type, content }) => (
             <button key={type} onClick={() => logActivity(type, content)} disabled={saving}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 100, fontSize: 12, fontWeight: 500, cursor: 'pointer', background: 'var(--surface-sunken)', color: 'var(--text-3)', border: '1px solid var(--border)', fontFamily: 'inherit', transition: 'all 0.15s' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 100, fontSize: 11, fontWeight: 500, cursor: 'pointer', background: 'var(--surface-sunken)', color: 'var(--text-3)', border: '1px solid var(--border)', fontFamily: 'inherit', transition: 'all 0.15s' }}
               onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background='var(--green-light)'; el.style.color='var(--green-text)'; el.style.borderColor='var(--green)' }}
               onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background='var(--surface-sunken)'; el.style.color='var(--text-3)'; el.style.borderColor='var(--border)' }}>
               {label}
@@ -121,7 +121,7 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
         </div>
       </div>
 
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
         <textarea value={note} onChange={e => setNote(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote() }}
           className="input" rows={3} style={{ resize: 'none', fontSize: 13, lineHeight: 1.5 }}
@@ -147,7 +147,7 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
           const Icon = activityIcon[a.type] ?? FileText
           const avatarUrl = a.created_by ? profileAvatars[a.created_by] : null
           return (
-            <div key={a.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border)', alignItems: 'flex-start' }}>
+            <div key={a.id} style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'flex-start' }}>
               {/* User avatar */}
               <UserAvatar name={a.created_by_name || '?'} avatarUrl={avatarUrl} size={26} />
               <div style={{ flex: 1, minWidth: 0 }}>

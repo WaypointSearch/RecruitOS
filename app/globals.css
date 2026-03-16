@@ -322,3 +322,7 @@
 
 /* Ensure main content area always uses theme bg */
 main { background: var(--bg) !important; min-height: 100vh; }
+
+/* Prevent horizontal scrolling */
+body { overflow-x: hidden; }
+main { overflow-x: hidden; }
