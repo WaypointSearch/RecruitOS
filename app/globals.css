@@ -326,3 +326,15 @@ main { background: var(--bg) !important; min-height: 100vh; }
 /* Prevent horizontal scrolling */
 body { overflow-x: hidden; }
 main { overflow-x: hidden; }
+
+/* Candidate profile layout fix */
+.flex-1.overflow-y-auto,
+main.flex-1 {
+  max-width: calc(100vw - 200px);
+  overflow-x: hidden;
+}
+/* All page content containers */
+main > div {
+  max-width: 100%;
+  overflow-x: hidden;
+}
