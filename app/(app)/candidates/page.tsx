@@ -17,6 +17,34 @@ export default async function CandidatesPage({ searchParams }: { searchParams: {
 
   const { data: candidates } = await query
   const { data: allCandidates } = await (supabase as any).from('candidates').select('tags, location')
+  
+  // FIXED: Using Array.from() instead of spread operator to fix Vercel build error
+  const allTags = Array.from(new Set((allCandidates ?? []).flatMap((c: any) => c.tags ?? []))).sort() as string[]
+  const allLocations = Array.from(new Set((allCandidates ?? []).map((c: any) => c.location).filter(Boolean))).sort() as string[]
+
+  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const avColors = [['#e8f0fb','#0058b0'],['#eafaf0','#1a7a35'],['#fff5e0','#7d4800'],['#f3effe','#5c2d91'],['#fce8e8','#9b1a14']]
+
+  // ... rest of the file rendering logic
+}import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import Link from 'next/link'
+import { Upload, MapPin, Search } from 'lucide-react'
+import AddCandidateModal from './AddCandidateModal'
+
+export default async function CandidatesPage({ searchParams }: { searchParams: { q?: string; tag?: string; location?: string } }) {
+  const supabase = createServerComponentClient({ cookies })
+  let query = (supabase as any).from('candidates').select('*').order('created_at', { ascending: false })
+
+  if (searchParams.q) {
+    const q = '%' + searchParams.q + '%'
+    query = query.or('name.ilike.' + q + ',current_title.ilike.' + q + ',current_company.ilike.' + q + ',email.ilike.' + q + ',work_email.ilike.' + q + ',location.ilike.' + q)
+  }
+  if (searchParams.tag) query = query.contains('tags', [searchParams.tag])
+  if (searchParams.location) query = query.ilike('location', '%' + searchParams.location + '%')
+
+  const { data: candidates } = await query
+  const { data: allCandidates } = await (supabase as any).from('candidates').select('tags, location')
   const allTags = [...new Set((allCandidates ?? []).flatMap((c: any) => c.tags ?? []))].sort() as string[]
   const allLocations = [...new Set((allCandidates ?? []).map((c: any) => c.location).filter(Boolean))].sort() as string[]
 
