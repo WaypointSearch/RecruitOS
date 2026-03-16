@@ -6,6 +6,7 @@ import Link from 'next/link'
 import ActivityFeed from './ActivityFeed'
 import EditCandidateModal from './EditCandidateModal'
 import DeleteCandidateButton from './DeleteCandidateButton'
+import ResumeUpload from './ResumeUpload'
 
 export default function CandidateDetailPage() {
   const params = useParams()
@@ -25,7 +26,7 @@ export default function CandidateDetailPage() {
 
   useEffect(() => { load() }, [id])
 
-  if (!candidate) return <div><p style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading...</p></div>
+  if (!candidate) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading...</div>
 
   const commission = candidate.current_salary ? Math.round(candidate.current_salary * 0.2) : null
 
@@ -61,18 +62,14 @@ export default function CandidateDetailPage() {
       </div>
 
       {editing && (
-        <EditCandidateModal
-          candidate={candidate}
-          onClose={() => setEditing(false)}
-          onSaved={() => { setEditing(false); load() }}
-        />
+        <EditCandidateModal candidate={candidate} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load() }} />
       )}
 
       <div className="candidate-profile-grid">
-        {/* Left column */}
+        {/* Left */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
 
-          {/* Contact info */}
+          {/* Contact */}
           <div className="card" style={{ padding: 14 }}>
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Contact Info</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -81,61 +78,63 @@ export default function CandidateDetailPage() {
                   <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</p>
                   {val ? (
                     <a href={`${prefix}${val}`} target={prefix === '' ? '_blank' : undefined} rel="noreferrer"
-                       style={{ fontSize: 12, color: 'var(--accent)', wordBreak: 'break-all' }}>
-                      {val as string}
-                    </a>
-                  ) : (
-                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>—</p>
-                  )}
+                       style={{ fontSize: 12, color: 'var(--accent)', wordBreak: 'break-all' }}>{val as string}</a>
+                  ) : <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>—</p>}
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Professional info */}
+          {/* Professional */}
           <div className="card" style={{ padding: 14 }}>
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Professional Details</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {fields.map(([label, val]) => (
                 <div key={label as string}>
                   <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</p>
-                  <p style={{ fontSize: 13, color: val ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: (label as string).includes('Fee') ? 600 : 400 }}>
-                    {(val as string) || '—'}
-                  </p>
+                  <p style={{
+                    fontSize: 13,
+                    color: val ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    fontWeight: (label as string).includes('Fee') ? 700 : 400,
+                  }}>{(val as string) || '—'}</p>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Resume */}
+          <ResumeUpload
+            candidateId={id}
+            currentUrl={candidate.resume_url}
+            currentName={candidate.resume_name}
+            onUploaded={load}
+          />
 
           {/* Tags */}
           {candidate.tags?.length > 0 && (
             <div className="card" style={{ padding: 14 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tags</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {candidate.tags.map((t: string) => (
-                  <span key={t} className="badge badge-gray">{t}</span>
-                ))}
+                {candidate.tags.map((t: string) => <span key={t} className="badge badge-gray">{t}</span>)}
               </div>
             </div>
           )}
 
-          {/* Pipeline status */}
+          {/* Pipeline */}
           {pipeline.length > 0 && (
             <div className="card" style={{ padding: 14 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Pipeline Status</h3>
               {pipeline.map((p: any) => (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-light)' }}>
                   <span className="badge badge-blue">{p.stage}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {p.jobs?.title} @ {p.jobs?.companies?.name}
-                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.jobs?.title} @ {p.jobs?.companies?.name}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Right column — Activity */}
+        {/* Right — Activity */}
         <div className="card" style={{ padding: 12, position: 'sticky', top: 16, maxHeight: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Activity</h3>
           <div style={{ flex: 1, minHeight: 0 }}>

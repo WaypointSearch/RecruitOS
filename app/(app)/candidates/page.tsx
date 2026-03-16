@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import AddCandidateModal from './AddCandidateModal'
 
 export default function CandidatesPage() {
   const sb = useRef(createClientComponentClient()).current
@@ -13,9 +14,10 @@ export default function CandidatesPage() {
   const [search, setSearch] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [locationFilter, setLocationFilter] = useState('')
-  const [sortBy, setSortBy] = useState('name') // 'name' | 'last_contacted' | 'created_at'
+  const [sortBy, setSortBy] = useState('name')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const [toast, setToast] = useState<string | null>(null)
@@ -26,28 +28,19 @@ export default function CandidatesPage() {
   const load = async () => {
     const { data } = await (sb as any).from('candidates').select('*').order('name')
     setCandidates(data ?? [])
-
-    // Get unique tags and locations
     const tags = Array.from(new Set((data ?? []).flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[]
     const locs = Array.from(new Set((data ?? []).map((c: any) => c.location).filter(Boolean))).sort() as string[]
     setAllTags(tags)
     setAllLocations(locs)
 
-    // Get last contacted for each candidate
     const ids = (data ?? []).map((c: any) => c.id)
     if (ids.length > 0) {
-      // Load most recent activity per candidate
       const { data: acts } = await (sb as any)
-        .from('activities')
-        .select('candidate_id, created_at')
-        .in('candidate_id', ids)
-        .order('created_at', { ascending: false })
-
+        .from('activities').select('candidate_id, created_at')
+        .in('candidate_id', ids).order('created_at', { ascending: false })
       if (acts) {
         const map: Record<string, string> = {}
-        acts.forEach((a: any) => {
-          if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at
-        })
+        acts.forEach((a: any) => { if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at })
         setLastContacted(map)
       }
     }
@@ -55,7 +48,6 @@ export default function CandidatesPage() {
 
   useEffect(() => { load() }, [])
 
-  // Multi-keyword search: splits on spaces, ALL keywords must match across any field
   const filtered = candidates.filter((c: any) => {
     const keywords = search.toLowerCase().trim().split(/\s+/).filter(Boolean)
     if (keywords.length > 0) {
@@ -64,25 +56,18 @@ export default function CandidatesPage() {
         c.email, c.work_email, c.personal_email, c.previous_title,
         c.previous_company, c.linkedin, ...(c.tags ?? [])
       ].filter(Boolean).join(' ').toLowerCase()
-
-      const allMatch = keywords.every((kw: string) => searchable.includes(kw))
-      if (!allMatch) return false
+      if (!keywords.every((kw: string) => searchable.includes(kw))) return false
     }
     if (tagFilter && !(c.tags ?? []).includes(tagFilter)) return false
     if (locationFilter && c.location !== locationFilter) return false
     return true
   })
 
-  // Sort
   const sorted = [...filtered].sort((a: any, b: any) => {
     if (sortBy === 'last_contacted') {
-      const aDate = lastContacted[a.id] || ''
-      const bDate = lastContacted[b.id] || ''
-      return bDate.localeCompare(aDate) // most recent first
+      return (lastContacted[b.id] || '').localeCompare(lastContacted[a.id] || '')
     }
-    if (sortBy === 'created_at') {
-      return (b.created_at || '').localeCompare(a.created_at || '')
-    }
+    if (sortBy === 'created_at') return (b.created_at || '').localeCompare(a.created_at || '')
     return (a.name || '').localeCompare(b.name || '')
   })
 
@@ -90,41 +75,28 @@ export default function CandidatesPage() {
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize)
 
   const toggleSelect = (id: string) => {
-    setSelected(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
-
   const toggleAll = () => {
-    if (selected.size === paginated.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(paginated.map((c: any) => c.id)))
-    }
+    setSelected(selected.size === paginated.length ? new Set() : new Set(paginated.map((c: any) => c.id)))
   }
-
   const bulkDelete = async () => {
     const ids = Array.from(selected)
     for (let i = 0; i < ids.length; i += 50) {
       await (sb as any).from('candidates').delete().in('id', ids.slice(i, i + 50))
     }
     showToast(`Deleted ${ids.length} candidates`)
-    setSelected(new Set())
-    setConfirmBulkDelete(false)
-    load()
+    setSelected(new Set()); setConfirmBulkDelete(false); load()
   }
 
   const initials = (name: string) => name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?'
   const colors = ['#007aff', '#30d158', '#ff9f0a', '#ff3b30', '#af52de', '#5856d6', '#ff2d55', '#00c7be']
-  const colorFor = (name: string) => colors[Math.abs((name || '').charCodeAt(0) + (name || '').length) % colors.length]
+  const colorFor = (name: string) => colors[Math.abs((name||'').charCodeAt(0) + (name||'').length) % colors.length]
 
   const formatLastContact = (id: string) => {
     const d = lastContacted[id]
     if (!d) return '—'
-    const diff = Date.now() - new Date(d).getTime()
-    const days = Math.floor(diff / 86400000)
+    const days = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
     if (days === 0) return 'Today'
     if (days === 1) return 'Yesterday'
     if (days < 7) return `${days}d ago`
@@ -136,6 +108,13 @@ export default function CandidatesPage() {
     <div>
       {toast && <div className="toast toast-success">{toast}</div>}
 
+      {showAddModal && (
+        <AddCandidateModal
+          onClose={() => setShowAddModal(false)}
+          onAdded={() => { setShowAddModal(false); load() }}
+        />
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
@@ -143,73 +122,50 @@ export default function CandidatesPage() {
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <Link href="/import" className="btn btn-sm" style={{ textDecoration: 'none' }}>⬆ Import CSV</Link>
-          <Link href="/candidates/new" className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>+ Add Candidate</Link>
+          <button onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">+ Add Candidate</button>
         </div>
       </div>
 
-      {/* Search & Filters */}
+      {/* Filters */}
       <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           type="search"
-          placeholder="Search by keywords (e.g. mechanical new york)..."
+          placeholder="Search keywords (e.g. mechanical new york)..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           style={{ flex: 1, minWidth: 200 }}
         />
-        <select 
-          value={locationFilter} 
-          onChange={(e) => { setLocationFilter(e.target.value); setPage(1) }}
-          style={{ maxWidth: 170 }}
-        >
+        <select value={locationFilter} onChange={(e) => { setLocationFilter(e.target.value); setPage(1) }} style={{ maxWidth: 170 }}>
           <option value="">All locations</option>
           {allLocations.map((l: string) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <select 
-          value={tagFilter} 
-          onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
-          style={{ maxWidth: 150 }}
-        >
+        <select value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1) }} style={{ maxWidth: 150 }}>
           <option value="">All tags</option>
           {allTags.map((t: string) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select 
-          value={sortBy} 
-          onChange={(e) => { setSortBy(e.target.value); setPage(1) }}
-          style={{ maxWidth: 160 }}
-        >
+        <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1) }} style={{ maxWidth: 160 }}>
           <option value="name">Sort: Name</option>
           <option value="last_contacted">Sort: Last Contacted</option>
           <option value="created_at">Sort: Date Added</option>
         </select>
       </div>
 
-      {/* Bulk actions bar */}
+      {/* Bulk bar */}
       {selected.size > 0 && (
-        <div className="card" style={{
-          padding: '10px 16px', marginBottom: 12,
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: 'var(--accent-bg)', borderColor: 'var(--accent)',
-        }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-text)' }}>
-            {selected.size} selected
-          </span>
-          <button onClick={() => setConfirmBulkDelete(true)} className="btn btn-danger btn-sm">
-            Delete Selected
-          </button>
-          <button onClick={() => setSelected(new Set())} className="btn btn-sm">
-            Clear Selection
-          </button>
+        <div className="card" style={{ padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, background: 'var(--accent-bg)', borderColor: 'var(--accent)' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-text)' }}>{selected.size} selected</span>
+          <button onClick={() => setConfirmBulkDelete(true)} className="btn btn-danger btn-sm">Delete Selected</button>
+          <button onClick={() => setSelected(new Set())} className="btn btn-sm">Clear</button>
         </div>
       )}
 
-      {/* Confirm bulk delete */}
       {confirmBulkDelete && (
         <div className="modal-overlay">
           <div className="confirm-dialog">
             <h3>Delete {selected.size} Candidates?</h3>
-            <p>This action cannot be undone. All selected candidates and their activity history will be permanently removed.</p>
+            <p>This cannot be undone.</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button onClick={bulkDelete} className="btn btn-danger">Yes, Delete All</button>
+              <button onClick={bulkDelete} className="btn btn-danger">Yes, Delete</button>
               <button onClick={() => setConfirmBulkDelete(false)} className="btn">Cancel</button>
             </div>
           </div>
@@ -223,72 +179,47 @@ export default function CandidatesPage() {
             <thead>
               <tr>
                 <th style={{ width: 40 }}>
-                  <input
-                    type="checkbox"
-                    checked={paginated.length > 0 && selected.size === paginated.length}
-                    onChange={toggleAll}
-                    style={{ width: 16, height: 16, cursor: 'pointer' }}
-                  />
+                  <input type="checkbox" checked={paginated.length > 0 && selected.size === paginated.length} onChange={toggleAll} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                 </th>
                 <th>Name</th>
                 <th>Current Role</th>
                 <th className="hide-mobile">Company</th>
                 <th className="hide-mobile">Location</th>
                 <th>Last Contact</th>
-                <th style={{ width: 70 }}></th>
+                <th style={{ width: 60 }}></th>
               </tr>
             </thead>
             <tbody>
               {paginated.map((c: any) => (
                 <tr key={c.id} style={{ cursor: 'pointer' }}>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(c.id)}
-                      onChange={() => toggleSelect(c.id)}
-                      style={{ width: 16, height: 16, cursor: 'pointer' }}
-                    />
+                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                   </td>
                   <td onClick={() => router.push(`/candidates/${c.id}`)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="avatar" style={{ background: colorFor(c.name), color: 'white' }}>
-                        {initials(c.name)}
-                      </div>
+                      <div className="avatar" style={{ background: colorFor(c.name), color: 'white' }}>{initials(c.name)}</div>
                       <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
                     </div>
                   </td>
                   <td onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_title || '—'}</td>
                   <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_company || '—'}</td>
-                  <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>
-                    {c.location ? (
-                      <span style={{ fontSize: 12 }}>📍 {c.location}</span>
-                    ) : '—'}
-                  </td>
+                  <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.location ? `📍 ${c.location}` : '—'}</td>
                   <td onClick={() => router.push(`/candidates/${c.id}`)}>
-                    <span style={{ 
-                      fontSize: 12, 
-                      color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)',
-                      fontWeight: lastContacted[c.id] ? 500 : 400,
-                    }}>
+                    <span style={{ fontSize: 12, color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
                       {formatLastContact(c.id)}
                     </span>
                   </td>
                   <td>
-                    <Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
-                      View →
-                    </Link>
+                    <Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View →</Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
         {paginated.length === 0 && (
           <div style={{ padding: 40, textAlign: 'center' }}>
-            <p style={{ color: 'var(--text-tertiary)', fontSize: 14 }}>
-              {search || tagFilter || locationFilter ? 'No candidates match your filters' : 'No candidates yet — import a CSV or add one manually'}
-            </p>
+            <p style={{ color: 'var(--text-tertiary)' }}>{search ? 'No candidates match' : 'No candidates yet'}</p>
           </div>
         )}
       </div>
@@ -297,41 +228,19 @@ export default function CandidatesPage() {
       {sorted.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            Showing {((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}
+            {((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}
           </span>
-
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            {[25, 50, 100, 250, 500].map((s) => (
-              <button
-                key={s}
-                onClick={() => { setPageSize(s); setPage(1) }}
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[25,50,100,250,500].map((s) => (
+              <button key={s} onClick={() => { setPageSize(s); setPage(1) }}
                 className={`btn btn-sm ${pageSize === s ? 'btn-primary' : ''}`}
-                style={{ padding: '3px 8px', fontSize: 11 }}
-              >
-                {s}
-              </button>
+                style={{ padding: '3px 8px', fontSize: 11 }}>{s}</button>
             ))}
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 4 }}>per page</span>
           </div>
-
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="btn btn-sm"
-            >
-              ← Prev
-            </button>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Page {page} of {totalPages || 1}
-            </span>
-            <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page >= totalPages}
-              className="btn btn-sm"
-            >
-              Next →
-            </button>
+            <button onClick={() => setPage(Math.max(1, page-1))} disabled={page===1} className="btn btn-sm">←</button>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{page}/{totalPages||1}</span>
+            <button onClick={() => setPage(Math.min(totalPages, page+1))} disabled={page>=totalPages} className="btn btn-sm">→</button>
           </div>
         </div>
       )}
