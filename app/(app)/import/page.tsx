@@ -7,9 +7,15 @@ import { Upload, CheckCircle } from 'lucide-react'
 
 const CRM_FIELDS = [
   { value: 'name', label: 'Name *' },
-  { value: 'email', label: 'Email' },
-  { value: 'phone', label: 'Phone' },
+  { value: 'location', label: 'Location' },
+  { value: 'work_email', label: 'Work email' },
+  { value: 'personal_email', label: 'Personal email' },
+  { value: 'email', label: 'Email (general)' },
+  { value: 'work_phone', label: 'Work phone' },
+  { value: 'cell_phone', label: 'Cell phone' },
+  { value: 'phone', label: 'Phone (general)' },
   { value: 'linkedin', label: 'LinkedIn URL' },
+  { value: 'current_salary', label: 'Current salary' },
   { value: 'current_title', label: 'Current title' },
   { value: 'current_company', label: 'Current company' },
   { value: 'current_company_url', label: 'Company URL' },
@@ -38,20 +44,15 @@ export default function ImportPage() {
     setFileName(file.name)
     setListName(file.name.replace(/\.[^/.]+$/, ''))
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
+      header: true, skipEmptyLines: true,
       complete: (result) => {
         const headers = result.meta.fields ?? []
         setCsvHeaders(headers)
         setCsvRows(result.data as Record<string, string>[])
-        // Auto-guess mappings
         const autoMap: Record<string, string> = {}
         headers.forEach(h => {
           const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '')
-          const match = CRM_FIELDS.find(f => {
-            const fv = f.value.replace(/_/g, '').toLowerCase()
-            return lower.includes(fv) || fv.includes(lower)
-          })
+          const match = CRM_FIELDS.find(f => { const fv = f.value.replace(/_/g, '').toLowerCase(); return lower.includes(fv) || fv.includes(lower) })
           autoMap[h] = match?.value ?? '__skip__'
         })
         setMapping(autoMap)
@@ -64,124 +65,75 @@ export default function ImportPage() {
     setImporting(true)
     const { data: { user } } = await supabase.auth.getUser()
     const records = csvRows.map(row => {
-      const rec: Record<string, any> = { created_by: user!.id, source_list: listName }
+      const rec: Record<string, any> = { created_by: user!.id, source_list: listName, tags: [] }
       Object.entries(mapping).forEach(([csvCol, crmField]) => {
         if (crmField === '__skip__' || !crmField) return
         const val = row[csvCol]?.trim()
         if (!val) return
-        if (crmField === 'tags') rec.tags = val.split(',').map(t => t.trim()).filter(Boolean)
+        if (crmField === 'tags') rec.tags = val.split(',').map((t: string) => t.trim()).filter(Boolean)
+        else if (crmField === 'current_salary') rec.current_salary = parseInt(val) || null
         else rec[crmField] = val
       })
-      if (!rec.tags) rec.tags = []
       return rec
-    }).filter(r => r.name) // name is required
-
-    // Batch insert in chunks of 100
+    }).filter(r => r.name)
     let inserted = 0
     for (let i = 0; i < records.length; i += 100) {
       const chunk = records.slice(i, i + 100)
-      const { data } = await supabase.from('candidates').insert(chunk).select('id')
+      const { data } = await (supabase as any).from('candidates').insert(chunk).select('id')
       inserted += data?.length ?? 0
     }
-    setImportedCount(inserted)
-    setImporting(false)
-    setStep('done')
+    setImportedCount(inserted); setImporting(false); setStep('done')
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-semibold text-gray-900 mb-5">Import Candidates from CSV</h1>
-
+    <div style={{ padding: '20px 24px', maxWidth: 760, margin: '0 auto' }}>
+      <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px', marginBottom: 16 }}>Import Candidates from CSV</h1>
       {step === 'upload' && (
-        <div className="card p-6">
-          <div className="mb-4">
-            <label className="label">List / tag name</label>
-            <input className="input max-w-sm" value={listName} onChange={e => setListName(e.target.value)}
-              placeholder="e.g. Engineering Leaders Q1 2025" />
-          </div>
-          <div
-            className="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
-            onClick={() => fileRef.current?.click()}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}>
-            <Upload className="mx-auto mb-3 text-gray-300" size={36} />
-            <p className="text-sm font-medium text-gray-600">Click to upload or drag & drop</p>
-            <p className="text-xs text-gray-400 mt-1">.csv files only · up to 10,000 rows</p>
-            <input ref={fileRef} type="file" accept=".csv" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+        <div className="mac-card" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 16 }}><label className="label">List / tag name</label><input className="input" value={listName} onChange={e => setListName(e.target.value)} placeholder="e.g. Engineering Leaders Q1 2025" style={{ maxWidth: 360 }} /></div>
+          <div onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+            style={{ border: '2px dashed var(--border-strong)', borderRadius: 12, padding: '48px 24px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
+            onMouseEnter={e => { (e.currentTarget as any).style.borderColor = 'var(--accent)'; (e.currentTarget as any).style.background = 'var(--accent-light)' }}
+            onMouseLeave={e => { (e.currentTarget as any).style.borderColor = 'var(--border-strong)'; (e.currentTarget as any).style.background = 'transparent' }}>
+            <Upload size={32} style={{ margin: '0 auto 12px', color: 'var(--text-4)', display: 'block' }} />
+            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>Click to upload or drag & drop</p>
+            <p style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 4 }}>.csv files only</p>
+            <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
           </div>
         </div>
       )}
-
       {step === 'map' && (
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Map columns from <span className="text-blue-600">{fileName}</span></p>
-              <p className="text-xs text-gray-500 mt-0.5">{csvRows.length} rows detected</p>
-            </div>
-            <div className="mb-4">
-              <label className="label">List name</label>
-              <input className="input" value={listName} onChange={e => setListName(e.target.value)} />
-            </div>
+        <div className="mac-card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Map columns from <span style={{ color: 'var(--accent)' }}>{fileName}</span></p><p style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 2 }}>{csvRows.length} rows</p></div>
+            <div style={{ width: 200 }}><label className="label">List name</label><input className="input" value={listName} onChange={e => setListName(e.target.value)} /></div>
           </div>
-
-          <div className="bg-gray-50 rounded-lg overflow-hidden mb-5">
-            <div className="grid grid-cols-[1fr_32px_1fr] gap-3 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-200">
+          <div style={{ background: 'var(--surface-sunken)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 32px 1fr', gap: 12, padding: '8px 14px', fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid var(--border)' }}>
               <span>CSV column</span><span></span><span>CRM field</span>
             </div>
             {csvHeaders.map(h => (
-              <div key={h} className="grid grid-cols-[1fr_32px_1fr] gap-3 items-center px-4 py-2.5 border-b border-gray-100 last:border-0">
-                <span className="text-sm text-gray-700 font-mono truncate">{h}</span>
-                <span className="text-gray-400 text-xs text-center">→</span>
-                <select
-                  className="input py-1.5 text-sm"
-                  value={mapping[h] ?? '__skip__'}
-                  onChange={e => setMapping(m => ({ ...m, [h]: e.target.value }))}>
+              <div key={h} style={{ display: 'grid', gridTemplateColumns: '1fr 32px 1fr', gap: 12, alignItems: 'center', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-2)', fontFamily: 'monospace' }}>{h}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-4)', textAlign: 'center' }}>→</span>
+                <select className="input" style={{ padding: '4px 8px', fontSize: 12 }} value={mapping[h] ?? '__skip__'} onChange={e => setMapping(m => ({ ...m, [h]: e.target.value }))}>
                   {CRM_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                 </select>
               </div>
             ))}
           </div>
-
-          {/* Preview */}
-          {csvRows.length > 0 && (
-            <div className="mb-5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Preview (first 3 rows)</p>
-              <div className="overflow-x-auto rounded-lg border border-gray-100">
-                <table className="text-xs w-full">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100">
-                    {csvHeaders.filter(h => mapping[h] !== '__skip__').map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-gray-500">{mapping[h]}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>{csvRows.slice(0, 3).map((row, i) => (
-                    <tr key={i} className="border-b border-gray-50 last:border-0">
-                      {csvHeaders.filter(h => mapping[h] !== '__skip__').map(h => (
-                        <td key={h} className="px-3 py-2 text-gray-700 max-w-[140px] truncate">{row[h]}</td>
-                      ))}
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-between">
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button className="btn" onClick={() => { setStep('upload'); setCsvHeaders([]); setCsvRows([]) }}>← Back</button>
-            <button className="btn btn-primary" onClick={runImport} disabled={importing}>
-              {importing ? 'Importing…' : `Import ${csvRows.length} candidates`}
-            </button>
+            <button className="btn btn-primary" onClick={runImport} disabled={importing}>{importing ? 'Importing...' : 'Import ' + csvRows.length + ' candidates'}</button>
           </div>
         </div>
       )}
-
       {step === 'done' && (
-        <div className="card p-10 text-center">
-          <CheckCircle className="mx-auto mb-4 text-green-500" size={48} />
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Import complete!</h2>
-          <p className="text-sm text-gray-500 mb-6">{importedCount} candidates added to the list "{listName}"</p>
-          <div className="flex justify-center gap-3">
+        <div className="mac-card" style={{ padding: 48, textAlign: 'center' }}>
+          <CheckCircle size={48} style={{ color: 'var(--green)', margin: '0 auto 16px', display: 'block' }} />
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Import complete!</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: 24 }}>{importedCount} candidates added to "{listName}"</p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
             <button className="btn" onClick={() => setStep('upload')}>Import another</button>
             <button className="btn btn-primary" onClick={() => router.push('/candidates')}>View candidates</button>
           </div>

@@ -2,126 +2,125 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, MapPin, DollarSign, Briefcase, Mail, Phone, Globe, Linkedin } from 'lucide-react'
 import ActivityFeed from './ActivityFeed'
 import AssignJobModal from './AssignJobModal'
+import EditCandidateModal from './EditCandidateModal'
+import DeleteCandidateButton from './DeleteCandidateButton'
 
 export default async function CandidateProfilePage({ params }: { params: { id: string } }) {
   const supabase = createServerComponentClient({ cookies })
-
-  const [{ data: candidate }, { data: pipeline }, { data: jobs }, { data: session }] = await Promise.all([
-    supabase.from('candidates').select('*').eq('id', params.id).single(),
-    supabase.from('pipeline')
-      .select('*, jobs(id, title, status, companies(name))')
-      .eq('candidate_id', params.id)
-      .order('added_at', { ascending: false }),
-    supabase.from('jobs').select('id, title, companies(name)').eq('status', 'Active'),
+  const [{ data: candidate }, { data: pipeline }, { data: jobs }, { data: { session } }] = await Promise.all([
+    (supabase as any).from('candidates').select('*').eq('id', params.id).single(),
+    (supabase as any).from('pipeline').select('*, jobs(id, title, status, companies(name))').eq('candidate_id', params.id).order('added_at', { ascending: false }),
+    (supabase as any).from('jobs').select('id, title, companies(name)').eq('status', 'Active'),
     supabase.auth.getSession(),
   ])
-
   if (!candidate) notFound()
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', session.session!.user.id).single()
+  const { data: profile } = await (supabase as any).from('profiles').select('*').eq('id', session!.user.id).single()
 
   const initials = candidate.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const fmt = (n: number) => '$' + (n / 1000).toFixed(0) + 'K'
+  const commission = candidate.current_salary ? Math.round(candidate.current_salary * 0.20) : null
 
-  const stageColor = (stage: string) => {
-    if (['Offer Accepted', 'Started - Send Invoice'].includes(stage)) return 'badge-green'
-    if (['Offer Extended'].includes(stage)) return 'badge-blue'
-    if (['Interview Scheduled', 'Interview Requested'].includes(stage)) return 'badge-amber'
+  const stageColor = (s: string) => {
+    if (['Offer Accepted', 'Started - Send Invoice'].includes(s)) return 'badge-green'
+    if (s === 'Offer Extended') return 'badge-blue'
+    if (['Interview Scheduled', 'Interview Requested'].includes(s)) return 'badge-amber'
     return 'badge-gray'
   }
 
-  const fields = [
-    ['Current title', candidate.current_title],
-    ['Current company', candidate.current_company],
-    ['Company URL', candidate.current_company_url],
-    ['Time in role', candidate.time_in_current_role],
-    ['Previous title', candidate.previous_title],
-    ['Previous company', candidate.previous_company],
-    ['Previous dates', candidate.previous_dates],
-    ['Email', candidate.email],
-    ['Phone', candidate.phone],
-    ['LinkedIn', candidate.linkedin],
-    ['Source list', candidate.source_list],
-  ].filter(([, v]) => v)
+  const InfoRow = ({ icon: Icon, label, value, href }: any) => {
+    if (!value) return null
+    return (
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+        <Icon size={13} style={{ color: 'var(--text-4)', marginTop: 2, flexShrink: 0 }} />
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</div>
+          {href
+            ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>{value}</a>
+            : <div style={{ fontSize: 13, color: 'var(--text)' }}>{value}</div>
+          }
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <Link href="/candidates" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-5">
+    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+      <Link href="/candidates" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-3)', textDecoration: 'none', marginBottom: 16 }}>
         <ArrowLeft size={14} /> Back to candidates
       </Link>
-
-      <div className="grid grid-cols-[1fr_360px] gap-5">
-        {/* Left column */}
-        <div className="space-y-4">
-          {/* Header card */}
-          <div className="card p-5">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 text-lg font-bold flex items-center justify-center flex-shrink-0">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="mac-card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent-text)', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {initials}
               </div>
-              <div className="flex-1">
-                <h1 className="text-xl font-semibold text-gray-900">{candidate.name}</h1>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {candidate.current_title}{candidate.current_company ? ` · ${candidate.current_company}` : ''}
+              <div style={{ flex: 1 }}>
+                <h1 style={{ fontSize: 19, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>{candidate.name}</h1>
+                <p style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+                  {candidate.current_title}{candidate.current_company ? ' · ' + candidate.current_company : ''}
                 </p>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {(candidate.tags ?? []).map((t: string) => (
-                    <span key={t} className="badge badge-gray">{t}</span>
-                  ))}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {candidate.location && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-3)' }}><MapPin size={11} />{candidate.location}</span>}
+                  {commission && <span className="commission-pill"><DollarSign size={10} />{fmt(commission)} potential fee</span>}
+                  {(candidate.tags ?? []).map((t: string) => <span key={t} className="badge badge-gray">{t}</span>)}
                 </div>
               </div>
-              <AssignJobModal candidateId={candidate.id} jobs={jobs ?? []} currentProfile={profile!} />
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <EditCandidateModal candidate={candidate} />
+                <AssignJobModal candidateId={candidate.id} jobs={jobs ?? []} currentProfile={profile} />
+                <DeleteCandidateButton candidateId={candidate.id} />
+              </div>
             </div>
           </div>
 
-          {/* Details */}
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">Details</h2>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
-              {fields.map(([label, value]) => (
-                <div key={label as string}>
-                  <dt className="text-xs text-gray-400 mb-0.5">{label}</dt>
-                  <dd className="text-sm text-gray-800">
-                    {String(label).toLowerCase().includes('url') || String(label).toLowerCase() === 'linkedin'
-                      ? <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate block">{value}</a>
-                      : value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+          <div className="mac-card" style={{ padding: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+              <div>
+                <div className="section-title">Contact</div>
+                <InfoRow icon={Mail} label="Work email" value={candidate.work_email} href={'mailto:' + candidate.work_email} />
+                <InfoRow icon={Mail} label="Personal email" value={candidate.personal_email} href={'mailto:' + candidate.personal_email} />
+                <InfoRow icon={Mail} label="Email" value={candidate.email} href={'mailto:' + candidate.email} />
+                <InfoRow icon={Phone} label="Work phone" value={candidate.work_phone} />
+                <InfoRow icon={Phone} label="Cell phone" value={candidate.cell_phone} />
+                <InfoRow icon={Phone} label="Phone" value={candidate.phone} />
+                <InfoRow icon={Linkedin} label="LinkedIn" value={candidate.linkedin} href={candidate.linkedin} />
+              </div>
+              <div>
+                <div className="section-title">Background</div>
+                <InfoRow icon={Briefcase} label="Current title" value={candidate.current_title} />
+                <InfoRow icon={Briefcase} label="Current company" value={candidate.current_company} />
+                <InfoRow icon={Globe} label="Company URL" value={candidate.current_company_url} href={candidate.current_company_url} />
+                <InfoRow icon={Briefcase} label="Time in role" value={candidate.time_in_current_role} />
+                <InfoRow icon={Briefcase} label="Previous title" value={candidate.previous_title} />
+                <InfoRow icon={Briefcase} label="Previous company" value={candidate.previous_company} />
+                <InfoRow icon={Briefcase} label="Previous dates" value={candidate.previous_dates} />
+                <InfoRow icon={DollarSign} label="Current salary" value={candidate.current_salary ? '$' + candidate.current_salary.toLocaleString() : null} />
+                <InfoRow icon={MapPin} label="Location" value={candidate.location} />
+              </div>
+            </div>
           </div>
 
-          {/* Active pipeline */}
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">Pipeline assignments</h2>
-            {pipeline?.length === 0
-              ? <p className="text-sm text-gray-400">Not assigned to any jobs yet.</p>
-              : (
-                <div className="space-y-2">
-                  {pipeline?.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                      <div className="flex-1">
-                        <Link href={`/pipeline/${p.jobs?.id}`} className="text-sm font-medium text-gray-800 hover:text-blue-600">
-                          {(p.jobs as any)?.title}
-                        </Link>
-                        <p className="text-xs text-gray-400">{(p.jobs as any)?.companies?.name}</p>
-                      </div>
-                      <span className={`badge ${stageColor(p.stage)}`}>{p.stage}</span>
-                    </div>
-                  ))}
+          <div className="mac-card" style={{ padding: 16 }}>
+            <div className="section-title">Pipeline ({(pipeline ?? []).length})</div>
+            {(pipeline ?? []).length === 0
+              ? <p style={{ fontSize: 13, color: 'var(--text-4)' }}>Not assigned to any jobs yet.</p>
+              : (pipeline ?? []).map((p: any) => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ flex: 1 }}>
+                    <Link href={'/pipeline/' + p.jobs?.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', textDecoration: 'none' }}>{(p.jobs as any)?.title}</Link>
+                    <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{(p.jobs as any)?.companies?.name}</p>
+                  </div>
+                  <span className={'badge ' + stageColor(p.stage)}>{p.stage}</span>
                 </div>
-              )}
+              ))
+            }
           </div>
         </div>
-
-        {/* Right column — activity feed */}
-        <ActivityFeed
-          candidateId={candidate.id}
-          currentProfile={profile!}
-        />
+        <ActivityFeed candidateId={candidate.id} currentProfile={profile} />
       </div>
     </div>
   )

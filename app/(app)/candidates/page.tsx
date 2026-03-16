@@ -1,98 +1,90 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { UserPlus, Upload } from 'lucide-react'
+import { Upload, MapPin, Search } from 'lucide-react'
 import AddCandidateModal from './AddCandidateModal'
 
-export default async function CandidatesPage({
-  searchParams
-}: {
-  searchParams: { q?: string; tag?: string }
-}) {
+export default async function CandidatesPage({ searchParams }: { searchParams: { q?: string; tag?: string; location?: string } }) {
   const supabase = createServerComponentClient({ cookies })
-  let query = supabase.from('candidates').select('*').order('created_at', { ascending: false })
-  if (searchParams.q) query = query.ilike('name', `%${searchParams.q}%`)
+  let query = (supabase as any).from('candidates').select('*').order('created_at', { ascending: false })
+
+  if (searchParams.q) {
+    const q = '%' + searchParams.q + '%'
+    query = query.or('name.ilike.' + q + ',current_title.ilike.' + q + ',current_company.ilike.' + q + ',email.ilike.' + q + ',work_email.ilike.' + q + ',location.ilike.' + q)
+  }
   if (searchParams.tag) query = query.contains('tags', [searchParams.tag])
+  if (searchParams.location) query = query.ilike('location', '%' + searchParams.location + '%')
+
   const { data: candidates } = await query
+  const { data: allCandidates } = await (supabase as any).from('candidates').select('tags, location')
+  const allTags = [...new Set((allCandidates ?? []).flatMap((c: any) => c.tags ?? []))].sort() as string[]
+  const allLocations = [...new Set((allCandidates ?? []).map((c: any) => c.location).filter(Boolean))].sort() as string[]
 
-  // Gather all unique tags for filter bar
-  const { data: allCandidates } = await supabase.from('candidates').select('tags')
-  const allTags = [...new Set((allCandidates ?? []).flatMap(c => c.tags ?? []))].sort()
-
-  const initials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  const avatarColors = ['bg-blue-100 text-blue-700', 'bg-teal-100 text-teal-700',
-    'bg-amber-100 text-amber-700', 'bg-purple-100 text-purple-700', 'bg-rose-100 text-rose-700']
+  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const avColors = [['#e8f0fb','#0058b0'],['#eafaf0','#1a7a35'],['#fff5e0','#7d4800'],['#f3effe','#5c2d91'],['#fce8e8','#9b1a14']]
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-semibold text-gray-900">Candidates</h1>
-        <div className="flex gap-2">
-          <Link href="/import" className="btn btn-sm gap-1.5"><Upload size={13} />Import CSV</Link>
+    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>Candidates</h1>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link href="/import" className="btn btn-sm"><Upload size={13} />Import CSV</Link>
           <AddCandidateModal />
         </div>
       </div>
 
-      {/* Search + tag filter */}
-      <form method="GET" className="flex gap-3 mb-4">
-        <input name="q" defaultValue={searchParams.q} className="input max-w-xs"
-          placeholder="Search by name…" />
-        <select name="tag" defaultValue={searchParams.tag} className="input max-w-[160px]">
-          <option value="">All tags</option>
-          {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+      <form method="GET" style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div className="search-bar" style={{ flex: 1, minWidth: 200 }}>
+          <Search size={13} />
+          <input name="q" defaultValue={searchParams.q} placeholder="Search name, title, company, email, location..." />
+        </div>
+        <select name="location" defaultValue={searchParams.location} className="input" style={{ width: 160 }}>
+          <option value="">All locations</option>
+          {allLocations.map((l: string) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <button type="submit" className="btn btn-sm">Filter</button>
-        {(searchParams.q || searchParams.tag) && (
-          <Link href="/candidates" className="btn btn-sm text-gray-500">Clear</Link>
+        <select name="tag" defaultValue={searchParams.tag} className="input" style={{ width: 140 }}>
+          <option value="">All tags</option>
+          {allTags.map((t: string) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button type="submit" className="btn btn-sm btn-primary">Filter</button>
+        {(searchParams.q || searchParams.tag || searchParams.location) && (
+          <Link href="/candidates" className="btn btn-sm">Clear</Link>
         )}
       </form>
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100">
-              {['Name', 'Current role', 'Company', 'Time in role', 'Tags', ''].map(h => (
-                <th key={h} className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {candidates?.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
-                No candidates yet. Add one or import a CSV.
-              </td></tr>
+      <div className="mac-card" style={{ overflow: 'hidden' }}>
+        <table className="mac-table">
+          <thead><tr>{['Name','Current role','Company','Location','Tags',''].map(h => <th key={h}>{h}</th>)}</tr></thead>
+          <tbody>
+            {(!candidates || candidates.length === 0) && (
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-4)', fontSize: 13 }}>No candidates found.</td></tr>
             )}
-            {candidates?.map((c, i) => (
-              <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${avatarColors[i % avatarColors.length]}`}>
-                      {initials(c.name)}
+            {(candidates ?? []).map((c: any, i: number) => {
+              const [bg, fg] = avColors[i % avColors.length]
+              return (
+                <tr key={c.id} onClick={() => window.location.href = '/candidates/' + c.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: bg, color: fg, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {initials(c.name)}
+                      </div>
+                      <span style={{ fontWeight: 600, color: 'var(--text)' }}>{c.name}</span>
                     </div>
-                    <Link href={`/candidates/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600">
-                      {c.name}
-                    </Link>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-600">{c.current_title || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{c.current_company || '—'}</td>
-                <td className="px-4 py-3 text-gray-500">{c.time_in_current_role || '—'}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(c.tags ?? []).map(t => (
-                      <span key={t} className="badge badge-gray">{t}</span>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Link href={`/candidates/${c.id}`} className="text-xs text-blue-600 hover:underline">
-                    View →
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td>{c.current_title || '—'}</td>
+                  <td>{c.current_company || '—'}</td>
+                  <td>
+                    {c.location
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><MapPin size={11} style={{ color: 'var(--text-4)' }} />{c.location}</span>
+                      : '—'}
+                  </td>
+                  <td><div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{(c.tags ?? []).map((t: string) => <span key={t} className="badge badge-gray">{t}</span>)}</div></td>
+                  <td style={{ textAlign: 'right' }}>
+                    <Link href={'/candidates/' + c.id} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }} onClick={e => e.stopPropagation()}>View →</Link>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
