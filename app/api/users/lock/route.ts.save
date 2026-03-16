@@ -23,11 +23,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
 
   // Update profile lock flag
-  // Fixed: Cast admin to 'any' to bypass Supabase schema typing issues on build
-  await (admin as any).from('profiles').update({ is_locked: locked }).eq('id', userId)
-
-  // Also ban/unban at the auth level so their token is immediately invalidated
-  await admin.auth.admin.updateUserById(userId, { ban_duration: locked ? '876000h' : 'none' })
+ await admin.auth.admin.updateUserById(userId, { ban_duration: locked ? '876000h' : 'none' })
 
   return NextResponse.json({ success: true })
 }
