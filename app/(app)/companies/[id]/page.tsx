@@ -123,8 +123,12 @@ function CompanyActivityFeed({ companyId, profileId, profileName }: { companyId:
   const supabase = createSupabaseClient()
 
   const load = useCallback(async () => {
-    const { data } = await (supabase as any).from('company_activities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(30)
-    setActivities(data ?? [])
+    try {
+      const { data, error } = await (supabase as any).from('company_activities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(30)
+      if (!error) setActivities(data ?? [])
+    } catch (e) {
+      // company_activities table may not exist yet - run supabase-migration-v2.sql
+    }
   }, [companyId])
 
   useEffect(() => { load() }, [load])
@@ -132,7 +136,9 @@ function CompanyActivityFeed({ companyId, profileId, profileName }: { companyId:
   async function save() {
     if (!note.trim()) return
     setSaving(true)
-    await (supabase as any).from('company_activities').insert([{ company_id: companyId, type: 'note', content: note.trim(), created_by: profileId, created_by_name: profileName }])
+    try {
+      await (supabase as any).from('company_activities').insert([{ company_id: companyId, type: 'note', content: note.trim(), created_by: profileId, created_by_name: profileName }])
+    } catch(e) {}
     setNote(''); setSaving(false); load()
   }
 

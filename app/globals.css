@@ -219,3 +219,106 @@
 :root h1, :root h2 {
   color: #1d1d1f;
 }
+
+/* ═══════════════════════════════════════════════════════
+   FULL DARK MODE OVERRIDE
+   Forces all pages to respect data-theme regardless of Tailwind
+   ═══════════════════════════════════════════════════════ */
+
+/* Page backgrounds */
+[data-theme="dark"] main,
+[data-theme="dark"] #__next,
+[data-theme="dark"] body > div,
+[data-theme="dark"] .bg-gray-50,
+[data-theme="dark"] .bg-white {
+  background: var(--bg) !important;
+}
+
+/* Cards */
+[data-theme="dark"] .card,
+[data-theme="dark"] .bg-white.rounded-xl,
+[data-theme="dark"] .bg-white.rounded-lg,
+[data-theme="dark"] [class*="rounded"][class*="border"] {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+/* Text colors */
+[data-theme="dark"] .text-gray-900,
+[data-theme="dark"] .text-gray-800 { color: var(--text) !important; }
+[data-theme="dark"] .text-gray-700,
+[data-theme="dark"] .text-gray-600 { color: var(--text-2) !important; }
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-gray-400 { color: var(--text-3) !important; }
+
+/* Metric cards (dashboard) */
+[data-theme="dark"] .bg-gray-100,
+[data-theme="dark"] .bg-gray-50 { background: var(--surface-sunken) !important; }
+
+/* Table */
+[data-theme="dark"] table { background: var(--surface) !important; color: var(--text) !important; }
+[data-theme="dark"] thead { background: var(--surface-sunken) !important; }
+[data-theme="dark"] th { background: var(--surface-sunken) !important; color: var(--text-3) !important; border-color: var(--border) !important; }
+[data-theme="dark"] td { color: var(--text-2) !important; border-color: var(--border) !important; }
+[data-theme="dark"] tbody tr:hover td { background: var(--surface-raised) !important; }
+
+/* Borders */
+[data-theme="dark"] .border-gray-100,
+[data-theme="dark"] .border-gray-200 { border-color: var(--border) !important; }
+
+/* Inputs */
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="password"],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: var(--surface-sunken) !important;
+  color: var(--text) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+
+/* Buttons with Tailwind classes */
+[data-theme="dark"] button.bg-white,
+[data-theme="dark"] a.bg-white { background: var(--surface) !important; color: var(--text) !important; }
+
+/* Job cards */
+[data-theme="dark"] .job-card,
+[data-theme="dark"] a[class*="border"][class*="rounded"] {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+/* Hover states */
+[data-theme="dark"] .hover\:bg-gray-50:hover { background: var(--surface-raised) !important; }
+
+/* Main page wrapper - catch-all */
+[data-theme="dark"] > body > div { background: var(--bg); }
+
+/* Specific page backgrounds using inline style bg */
+[data-theme="dark"] div[style*="background: #f5f5f7"],
+[data-theme="dark"] div[style*="background:#f5f5f7"],
+[data-theme="dark"] div[style*="background: white"],
+[data-theme="dark"] div[style*="background:white"] {
+  background: var(--bg) !important;
+}
+
+/* Dashboard metric cards */
+[data-theme="dark"] .metric-card { background: var(--surface) !important; color: var(--text) !important; }
+
+/* Dividers */
+[data-theme="dark"] hr,
+[data-theme="dark"] .divider { border-color: var(--border) !important; }
+
+/* ═══════════════════════════════════════════════════════
+   LIGHT MODE IMPROVEMENTS - better contrast
+   ═══════════════════════════════════════════════════════ */
+:root body { background: #f5f5f7; }
+:root .mac-table td { color: #1d1d1f; }
+:root .mac-table tbody tr:hover td { background: #f5f5f7; }
+:root h1, :root h2, :root h3 { color: #1d1d1f; }
+:root p { color: #3d3d3f; }
+
+/* Ensure main content area always uses theme bg */
+main { background: var(--bg) !important; min-height: 100vh; }
