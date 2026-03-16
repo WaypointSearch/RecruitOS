@@ -162,3 +162,60 @@
   .search-bar input { background: none; border: none; outline: none; color: var(--text); font-size: 13px; font-family: inherit; width: 100%; }
   .search-bar input::placeholder { color: var(--text-4); }
 }
+
+/* ─── Dark mode specific fixes ─── */
+[data-theme="dark"] .mac-table th {
+  background: #1c1c1e;
+  color: #8e8e93;
+}
+[data-theme="dark"] .mac-table tbody tr:hover td {
+  background: #2c2c2e;
+}
+[data-theme="dark"] .mac-card {
+  background: #1c1c1e;
+  border-color: rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .sidebar-link:hover {
+  background: #2c2c2e;
+}
+[data-theme="dark"] .input {
+  background: #2c2c2e;
+  border-color: rgba(255,255,255,0.12);
+  color: #f5f5f7;
+}
+[data-theme="dark"] .btn {
+  background: #2c2c2e;
+  border-color: rgba(255,255,255,0.12);
+  color: #f5f5f7;
+}
+[data-theme="dark"] .btn:hover:not(:disabled) {
+  background: #3a3a3c;
+}
+[data-theme="dark"] .kanban-card {
+  background: #1c1c1e;
+  border-color: rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .search-bar {
+  background: #2c2c2e;
+  border-color: rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .modal-content {
+  background: #1c1c1e;
+}
+[data-theme="dark"] .modal-header {
+  background: #1c1c1e;
+}
+[data-theme="dark"] .modal-footer {
+  background: #141414;
+}
+
+/* ─── Light mode contrast fixes ─── */
+:root .mac-table td {
+  color: #1d1d1f;
+}
+:root .section-title {
+  color: #6e6e73;
+}
+:root h1, :root h2 {
+  color: #1d1d1f;
+}

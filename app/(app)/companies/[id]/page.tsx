@@ -1,4 +1,4 @@
-"use client"
+'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createSupabaseClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -16,7 +16,8 @@ function EditCompanyModal({ company, onSave }: { company: any; onSave: () => voi
     local_phone: company.local_phone ?? '', notes: company.notes ?? '',
   })
   const supabase = createSupabaseClient()
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }))
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true)
@@ -30,13 +31,15 @@ function EditCompanyModal({ company, onSave }: { company: any; onSave: () => voi
   }
 
   if (!open) return <button className="btn btn-sm gap-1" onClick={() => setOpen(true)}><Pencil size={12} />Edit</button>
-
   return (
     <>
       <div className="modal-backdrop" onClick={() => setOpen(false)} />
       <div className="modal-box">
         <div className="modal-content">
-          <div className="modal-header"><span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Edit Company</span><button onClick={() => setOpen(false)} className="btn btn-sm"><X size={16} /></button></div>
+          <div className="modal-header">
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Edit Company</span>
+            <button onClick={() => setOpen(false)} className="btn btn-sm"><X size={16} /></button>
+          </div>
           <form onSubmit={submit}>
             <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ gridColumn: 'span 2' }}><label className="label">Company name *</label><input className="input" required value={form.name} onChange={set('name')} /></div>
@@ -48,7 +51,10 @@ function EditCompanyModal({ company, onSave }: { company: any; onSave: () => voi
               <div><label className="label">Local phone</label><input className="input" value={form.local_phone} onChange={set('local_phone')} /></div>
               <div style={{ gridColumn: 'span 2' }}><label className="label">Notes</label><textarea className="input" rows={3} style={{ resize: 'none' }} value={form.notes} onChange={set('notes')} /></div>
             </div>
-            <div className="modal-footer"><button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save changes'}</button></div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button>
+              <button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save changes'}</button>
+            </div>
           </form>
         </div>
       </div>
@@ -61,12 +67,17 @@ function DeleteCompanyButton({ companyId }: { companyId: string }) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createSupabaseClient()
-  async function doDelete() { setLoading(true); await (supabase as any).from('companies').delete().eq('id', companyId); setLoading(false); router.push('/companies'); router.refresh() }
+  async function doDelete() {
+    setLoading(true)
+    await (supabase as any).from('companies').delete().eq('id', companyId)
+    setLoading(false); router.push('/companies'); router.refresh()
+  }
   return (
     <>
       <button className="btn btn-sm" onClick={() => setOpen(true)} style={{ color: 'var(--red-text)', background: 'var(--red-light)', borderColor: 'transparent' }}><Trash2 size={12} />Delete</button>
       {open && (
-        <><div className="modal-backdrop" onClick={() => setOpen(false)} /><div className="modal-box"><div className="modal-content" style={{ maxWidth: 400 }}>
+        <><div className="modal-backdrop" onClick={() => setOpen(false)} />
+        <div className="modal-box"><div className="modal-content" style={{ maxWidth: 400 }}>
           <div className="modal-header"><div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-text)' }}><AlertTriangle size={16} /><span style={{ fontSize: 15, fontWeight: 600 }}>Delete company?</span></div><button onClick={() => setOpen(false)} className="btn btn-sm"><X size={14} /></button></div>
           <div className="modal-body"><p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6 }}>This permanently deletes the company, all contacts, and job orders. <strong style={{ color: 'var(--red-text)' }}>Cannot be undone.</strong></p></div>
           <div className="modal-footer"><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn-danger" onClick={doDelete} disabled={loading}><Trash2 size={13} />{loading ? 'Deleting...' : 'Yes, delete'}</button></div>
@@ -110,23 +121,32 @@ function CompanyActivityFeed({ companyId, profileId, profileName }: { companyId:
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const supabase = createSupabaseClient()
+
   const load = useCallback(async () => {
     const { data } = await (supabase as any).from('company_activities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(30)
     setActivities(data ?? [])
   }, [companyId])
+
   useEffect(() => { load() }, [load])
+
   async function save() {
     if (!note.trim()) return
     setSaving(true)
     await (supabase as any).from('company_activities').insert([{ company_id: companyId, type: 'note', content: note.trim(), created_by: profileId, created_by_name: profileName }])
-    setNote(''); setSaving(false); await load()
+    setNote(''); setSaving(false); load()
   }
+
   return (
     <div className="mac-card" style={{ overflow: 'hidden' }}>
       <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>Company Activity</div>
       <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-        <textarea className="input" rows={2} style={{ resize: 'none', fontSize: 13 }} value={note} onChange={e => setNote(e.target.value)} placeholder="Log activity or note..." onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save() }} />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}><button className="btn btn-primary btn-sm" onClick={save} disabled={saving || !note.trim()}>{saving ? 'Saving...' : 'Save note'}</button></div>
+        <textarea className="input" rows={2} style={{ resize: 'none', fontSize: 13 }} value={note}
+          onChange={e => setNote(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save() }}
+          placeholder="Log activity or note..." />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving || !note.trim()}>{saving ? 'Saving...' : 'Save note'}</button>
+        </div>
       </div>
       <div style={{ maxHeight: 280, overflowY: 'auto' }}>
         {activities.length === 0 && <p style={{ padding: '16px 14px', fontSize: 13, color: 'var(--text-4)' }}>No activity yet.</p>}
@@ -135,7 +155,10 @@ function CompanyActivityFeed({ companyId, profileId, profileName }: { companyId:
             <FileText size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
             <div>
               <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{a.content}</p>
-              <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}><span style={{ fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>{' · '}{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</p>
+              <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>
+                {' · '}{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+              </p>
             </div>
           </div>
         ))}
@@ -165,8 +188,12 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
 
   useEffect(() => { load() }, [load])
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)' }}>Loading...</div>
-  if (!company) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)' }}>Not found.</div>
+  if (loading) return (
+    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 14 }}>Loading...</div>
+  )
+  if (!company) return (
+    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)' }}>Company not found.</div>
+  )
 
   const initials = company.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
 
@@ -175,6 +202,7 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
       <Link href="/companies" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-3)', textDecoration: 'none', marginBottom: 16 }}>
         <ArrowLeft size={14} /> Back to companies
       </Link>
+
       <div className="mac-card" style={{ padding: 20, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--accent-light)', color: 'var(--accent-text)', fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials}</div>
@@ -189,7 +217,10 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
               {company.local_phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-3)' }}><Phone size={12} />Local: {company.local_phone}</span>}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}><EditCompanyModal company={company} onSave={load} /><DeleteCompanyButton companyId={company.id} /></div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <EditCompanyModal company={company} onSave={load} />
+            <DeleteCompanyButton companyId={company.id} />
+          </div>
         </div>
         {company.notes && <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 12, padding: '10px 14px', background: 'var(--surface-sunken)', borderRadius: 8, lineHeight: 1.6 }}>{company.notes}</p>}
       </div>
@@ -237,7 +268,9 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{j.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 2 }}>{j.location}{j.salary_min ? ' · $' + Math.round(j.salary_min/1000) + 'K–$' + Math.round(j.salary_max/1000) + 'K' : ''}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 2 }}>
+                    {j.location}{j.salary_min ? ' · $' + Math.round(j.salary_min/1000) + 'K–$' + Math.round(j.salary_max/1000) + 'K' : ''}
+                  </div>
                 </div>
                 <span className={'badge ' + (j.status === 'Active' ? 'badge-green' : 'badge-gray')}>{j.status}</span>
               </div>

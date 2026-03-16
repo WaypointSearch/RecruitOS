@@ -4,7 +4,7 @@ import { createSupabaseClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { UserPlus, X } from 'lucide-react'
 
-export default function AddCandidateModal() {
+export default function AddCandidateModal({ onAdded }: { onAdded?: () => void } = {}) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
@@ -35,7 +35,7 @@ export default function AddCandidateModal() {
       tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
       source_list: form.source_list || null, created_by: user!.id,
     }])
-    setLoading(false); setOpen(false); router.refresh()
+    setLoading(false); setOpen(false); if (onAdded) onAdded(); else router.refresh()
   }
 
   const F = ({ label, k, type = 'text', ph = '' }: any) => (
