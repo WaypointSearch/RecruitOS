@@ -46,7 +46,7 @@ export default function CompanyDetailPage() {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const updates: any = {}
-    for (const [k, v] of fd.entries()) updates[k] = v || null
+    for (const [k, v] of Array.from(fd.entries())) updates[k] = v || null
     await (sb as any).from('companies').update(updates).eq('id', id)
     showToast('Company updated')
     setEditing(false)
@@ -63,7 +63,7 @@ export default function CompanyDetailPage() {
     if (contacts.length >= 5) { showToast('Maximum 5 contacts per company'); return }
     const fd = new FormData(e.currentTarget)
     const obj: any = { company_id: id }
-    for (const [k, v] of fd.entries()) obj[k] = v || null
+    for (const [k, v] of Array.from(fd.entries())) obj[k] = v || null
     await (sb as any).from('company_contacts').insert([obj])
     showToast('Contact added')
     setAddingContact(false)

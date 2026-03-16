@@ -29,7 +29,7 @@ export default function CompaniesPage() {
     const fd = new FormData(e.currentTarget)
     const { data: { user } } = await sb.auth.getUser()
     const obj: any = { created_by: user?.id }
-    for (const [k, v] of fd.entries()) obj[k] = v || null
+    for (const [k, v] of Array.from(fd.entries())) obj[k] = v || null
     await (sb as any).from('companies').insert([obj])
     showToast('Company added')
     setAdding(false)

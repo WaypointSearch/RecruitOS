@@ -9,7 +9,7 @@ export default function EditCandidateModal({ candidate, onClose, onSaved }: { ca
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const updates: any = {}
-    for (const [k, v] of fd.entries()) {
+    for (const [k, v] of Array.from(fd.entries())) {
       if (k === 'current_salary') updates[k] = v ? parseInt(v as string) : null
       else if (k === 'tags') updates[k] = (v as string).split(',').map((t: string) => t.trim()).filter(Boolean)
       else updates[k] = v || null

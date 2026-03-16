@@ -32,7 +32,7 @@ export default function JobsPage() {
     const fd = new FormData(e.currentTarget)
     const { data: { user } } = await sb.auth.getUser()
     const obj: any = { created_by: user?.id }
-    for (const [k, v] of fd.entries()) {
+    for (const [k, v] of Array.from(fd.entries())) {
       if (k === 'salary_min' || k === 'salary_max') obj[k] = v ? parseInt(v as string) : null
       else obj[k] = v || null
     }
@@ -46,7 +46,7 @@ export default function JobsPage() {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const obj: any = {}
-    for (const [k, v] of fd.entries()) {
+    for (const [k, v] of Array.from(fd.entries())) {
       if (k === 'salary_min' || k === 'salary_max') obj[k] = v ? parseInt(v as string) : null
       else obj[k] = v || null
     }
