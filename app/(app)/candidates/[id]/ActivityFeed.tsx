@@ -19,56 +19,77 @@ const activityIcon: Record<string, any> = {
   stage_change: Send, added: FileText,
 }
 
-export default function ActivityFeed({ candidateId, currentProfile }: { candidateId: string; currentProfile: Profile }) {
-  const [activities, setActivities] = useState<Activity[]>([])
+const iconColor: Record<string, string> = {
+  note: 'var(--accent)', stage_change: 'var(--amber)',
+  called: 'var(--green)', voicemail: 'var(--green)', emailed: 'var(--green)',
+  linkedin: 'var(--green)', texted: 'var(--green)', added: 'var(--text-4)',
+}
+
+function UserAvatar({ name, avatarUrl, size = 24 }: { name: string; avatarUrl?: string | null; size?: number }) {
+  const initials = (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent-text)', fontSize: size * 0.38, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      {initials}
+    </div>
+  )
+}
+
+export default function ActivityFeed({ candidateId, currentProfile }: { candidateId: string; currentProfile: Profile & { avatar_url?: string | null } }) {
+  const [activities, setActivities] = useState<(Activity & { profiles?: { avatar_url?: string | null } | null })[]>([])
+  const [profileAvatars, setProfileAvatars] = useState<Record<string, string | null>>({})
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(true)
-  const feedRef = useRef<HTMLDivElement>(null)
   const supabaseRef = useRef(createSupabaseClient())
   const supabase = supabaseRef.current
 
   useEffect(() => {
-    async function loadActivities() {
+    async function init() {
       setLoading(true)
-      const { data, error: err } = await (supabase as any)
+      // Load activities
+      const { data: acts, error: err } = await (supabase as any)
         .from('activities').select('*')
         .eq('candidate_id', candidateId)
         .order('created_at', { ascending: false }).limit(50)
-      if (err) setError('Failed to load: ' + err.message)
-      else setActivities(data ?? [])
+      if (err) { setError('Failed to load: ' + err.message); setLoading(false); return }
+      setActivities(acts ?? [])
+
+      // Load avatar urls for all unique creators
+      const creatorIds = [...new Set((acts ?? []).map((a: any) => a.created_by).filter(Boolean))]
+      if (creatorIds.length > 0) {
+        const { data: profiles } = await (supabase as any)
+          .from('profiles').select('id, avatar_url').in('id', creatorIds)
+        const map: Record<string, string | null> = {}
+        ;(profiles ?? []).forEach((p: any) => { map[p.id] = p.avatar_url ?? null })
+        setProfileAvatars(map)
+      }
       setLoading(false)
     }
-    loadActivities()
+    init()
+
     const channel = supabase.channel('activities-' + candidateId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities', filter: 'candidate_id=eq.' + candidateId },
-        (payload: any) => {
-          setActivities(prev => [payload.new as Activity, ...prev])
-        })
+        (payload: any) => setActivities(prev => [payload.new as Activity, ...prev]))
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [candidateId])
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 2000)
-  }
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
   async function logActivity(type: Activity['type'], content: string) {
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     const { error: err } = await (supabase as any).from('activities').insert([{
       candidate_id: candidateId, type, content,
       created_by: currentProfile.id,
       created_by_name: currentProfile.full_name || currentProfile.email,
     }])
-    if (err) {
-      setError('Save failed: ' + err.message)
-    } else {
-      showToast('Logged: ' + content)
-    }
+    if (err) setError('Save failed: ' + err.message)
+    else showToast('Logged: ' + content)
     setSaving(false)
   }
 
@@ -83,14 +104,11 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
     <div className="mac-card" style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 120px)', overflow: 'hidden' }}>
       <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Activity & Notes</div>
-
-        {/* Toast confirmation */}
         {toast && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, background: 'var(--green-light)', color: 'var(--green-text)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
             <CheckCircle size={12} />{toast}
           </div>
         )}
-
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {QUICK_ACTIONS.map(({ label, type, content }) => (
             <button key={type} onClick={() => logActivity(type, content)} disabled={saving}
@@ -120,22 +138,25 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
         </div>
       </div>
 
-      <div ref={feedRef} style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading && <p style={{ padding: 16, fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>Loading...</p>}
         {!loading && activities.length === 0 && (
-          <p style={{ padding: '24px 16px', fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>No activity yet. Log an interaction above.</p>
+          <p style={{ padding: '24px 16px', fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>No activity yet.</p>
         )}
         {activities.map((a: any) => {
           const Icon = activityIcon[a.type] ?? FileText
+          const avatarUrl = a.created_by ? profileAvatars[a.created_by] : null
           return (
-            <div key={a.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-              <Icon size={13} style={{ color: a.type === 'note' ? 'var(--accent)' : a.type === 'stage_change' ? 'var(--amber)' : 'var(--green)', flexShrink: 0, marginTop: 2 }} />
+            <div key={a.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border)', alignItems: 'flex-start' }}>
+              {/* User avatar */}
+              <UserAvatar name={a.created_by_name || '?'} avatarUrl={avatarUrl} size={26} />
               <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <Icon size={12} style={{ color: iconColor[a.type] ?? 'var(--text-4)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+                </div>
                 <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{a.content}</p>
-                <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 3 }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>
-                  {' · '}{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                </p>
               </div>
             </div>
           )
