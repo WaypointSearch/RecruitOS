@@ -1,123 +1,92 @@
 'use client'
-
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useRouter } from 'next/navigation'
-import { Plus, X } from 'lucide-react'
+import { createSupabaseClient } from '@/lib/supabase'
+import { Building2, X } from 'lucide-react'
 
-export default function AddCompanyModal() {
+export default function AddCompanyModal({ onAdded }: { onAdded?: () => void } = {}) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = createClientComponentClient()
-
   const [form, setForm] = useState({
-    name: '',
-    status: 'Prospect',
-    industry: '',
-    website: '',
-    location: '',
-    notes: '',
-    contact_name: '',
-    contact_title: '',
-    contact_email: '',
-    contact_phone: '',
+    name: '', status: 'Prospect', website: '', industry: '', location: '',
+    corporate_phone: '', local_phone: '', notes: '',
+    contact_name: '', contact_title: '', contact_email: '', contact_phone: ''
   })
+  const supabase = createSupabaseClient()
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .insert([
-          {
-            name: form.name,
-            status: form.status,
-            website: form.website || null,
-            industry: form.industry || null,
-            location: form.location || null,
-            notes: form.notes || null,
-            user_id: user.id,
-          },
-        ])
-        .select()
-        .single()
-
-      if (companyError) throw companyError
-
-      if (company && form.contact_name) {
-        const { error: contactError } = await supabase
-          .from('company_contacts')
-          .insert([
-            {
-              company_id: (company as any).id,
-              name: form.contact_name,
-              title: form.contact_title || null,
-              email: form.contact_email || null,
-              phone: form.contact_phone || null,
-            },
-          ] as any)
-        if (contactError) throw contactError
-      }
-
-      setOpen(false)
-      setForm({ name: '', status: 'Prospect', industry: '', website: '', location: '', notes: '', contact_name: '', contact_title: '', contact_email: '', contact_phone: '' })
-      router.refresh()
-    } catch (err) {
-      console.error(err)
-      alert('Error adding company')
-    } finally {
-      setLoading(false)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: company } = await (supabase as any).from('companies').insert([{
+      name: form.name, status: form.status,
+      website: form.website || null, industry: form.industry || null,
+      location: form.location || null, corporate_phone: form.corporate_phone || null,
+      local_phone: form.local_phone || null, notes: form.notes || null,
+      created_by: user!.id,
+    }]).select().single()
+    if (company && form.contact_name) {
+      await (supabase as any).from('company_contacts').insert([{
+        company_id: company.id, name: form.contact_name,
+        title: form.contact_title || null, email: form.contact_email || null,
+        phone: form.contact_phone || null,
+      }])
     }
+    setLoading(false)
+    setOpen(false)
+    setForm({ name:'',status:'Prospect',website:'',industry:'',location:'',corporate_phone:'',local_phone:'',notes:'',contact_name:'',contact_title:'',contact_email:'',contact_phone:'' })
+    if (onAdded) onAdded()
   }
 
-  if (!open) return <button onClick={() => setOpen(true)} className="btn btn-primary btn-sm"><Plus size={14} /> Add Company</button>
+  const F = ({ label, k, type = 'text', ph = '', span = false }: any) => (
+    <div style={span ? { gridColumn: 'span 2' } : {}}>
+      <label className="label">{label}</label>
+      <input className="input" type={type} value={(form as any)[k]} onChange={set(k)} placeholder={ph} />
+    </div>
+  )
+
+  if (!open) return (
+    <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <Building2 size={13} />Add company
+    </button>
+  )
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b dark:border-gray-800">
-          <h2 className="text-lg font-bold">Add Company</h2>
-          <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-gray-700"><X size={20} /></button>
+    <>
+      <div className="modal-backdrop" onClick={() => setOpen(false)} />
+      <div className="modal-box">
+        <div className="modal-content">
+          <div className="modal-header">
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Add company</span>
+            <button onClick={() => setOpen(false)} className="btn btn-sm"><X size={16} /></button>
+          </div>
+          <form onSubmit={submit}>
+            <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <F label="Company name *" k="name" span />
+              <div><label className="label">Status</label><select className="input" value={form.status} onChange={set('status')}><option>Prospect</option><option>Client</option></select></div>
+              <F label="Industry" k="industry" />
+              <F label="Website" k="website" span />
+              <F label="Location" k="location" ph="Chicago, IL" span />
+              <F label="Corporate phone" k="corporate_phone" />
+              <F label="Local phone" k="local_phone" />
+              <div style={{ gridColumn: 'span 2', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Primary contact (optional)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <F label="Name" k="contact_name" />
+                  <F label="Title" k="contact_title" />
+                  <F label="Email" k="contact_email" type="email" />
+                  <F label="Phone" k="contact_phone" />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button>
+              <button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save company'}</button>
+            </div>
+          </form>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <label className="label">Company Name</label>
-            <input required className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Status</label>
-              <select className="input" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                <option value="Prospect">Prospect</option>
-                <option value="Client">Client</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Location</label>
-              <input className="input" placeholder="City, State" value={form.location} onChange={e => setForm({...form, location: e.target.value})} />
-            </div>
-          </div>
-          <div className="border-t dark:border-gray-800 pt-4 mt-4">
-            <p className="text-xs font-bold text-gray-500 uppercase mb-2">Primary Contact (Optional)</p>
-            <div className="space-y-3">
-              <input className="input" placeholder="Contact Name" value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})} />
-              <input className="input" placeholder="Title" value={form.contact_title} onChange={e => setForm({...form, contact_title: e.target.value})} />
-              <input className="input" placeholder="Email" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-gray">Cancel</button>
-            <button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save Company'}</button>
-          </div>
-        </form>
       </div>
-    </div>
+    </>
   )
 }

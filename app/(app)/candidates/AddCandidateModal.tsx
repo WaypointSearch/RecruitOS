@@ -1,69 +1,46 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createSupabaseClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { UserPlus, X } from 'lucide-react'
 
-const EMPTY = {
-  name: '', location: '', work_email: '', personal_email: '',
-  work_phone: '', cell_phone: '', linkedin: '', current_salary: '',
-  current_title: '', current_company: '', current_company_url: '',
-  time_in_current_role: '', previous_title: '', previous_company: '',
-  previous_dates: '', tags: '', source_list: ''
-}
-
 export default function AddCandidateModal() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState(EMPTY)
+  const formRef = useRef<HTMLFormElement>(null)
   const router = useRouter()
   const supabase = createSupabaseClient()
 
-  function handleChange(k: string, v: string) {
-    setForm(f => ({ ...f, [k]: v }))
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (!formRef.current) return
     setLoading(true)
+    const fd = new FormData(formRef.current)
+    const get = (k: string) => (fd.get(k) as string)?.trim() || null
     const { data: { user } } = await supabase.auth.getUser()
+    const tags = get('tags') ? (get('tags') as string).split(',').map(t => t.trim()).filter(Boolean) : []
     await (supabase as any).from('candidates').insert([{
-      name: form.name,
-      location: form.location || null,
-      work_email: form.work_email || null,
-      personal_email: form.personal_email || null,
-      work_phone: form.work_phone || null,
-      cell_phone: form.cell_phone || null,
-      linkedin: form.linkedin || null,
-      current_salary: form.current_salary ? parseInt(form.current_salary) : null,
-      current_title: form.current_title || null,
-      current_company: form.current_company || null,
-      current_company_url: form.current_company_url || null,
-      time_in_current_role: form.time_in_current_role || null,
-      previous_title: form.previous_title || null,
-      previous_company: form.previous_company || null,
-      previous_dates: form.previous_dates || null,
-      tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
-      source_list: form.source_list || null,
-      created_by: user!.id,
+      name: get('name')!, location: get('location'),
+      work_email: get('work_email'), personal_email: get('personal_email'),
+      work_phone: get('work_phone'), cell_phone: get('cell_phone'),
+      linkedin: get('linkedin'),
+      current_salary: get('current_salary') ? parseInt(get('current_salary')!) : null,
+      current_title: get('current_title'), current_company: get('current_company'),
+      current_company_url: get('current_company_url'), time_in_current_role: get('time_in_current_role'),
+      previous_title: get('previous_title'), previous_company: get('previous_company'),
+      previous_dates: get('previous_dates'), source_list: get('source_list'),
+      tags, created_by: user!.id,
     }])
     setLoading(false)
     setOpen(false)
-    setForm(EMPTY)
+    formRef.current?.reset()
     router.refresh()
   }
 
-  const inp = (k: string, label: string, opts: any = {}) => (
+  const F = ({ label, name, type = 'text', ph = '' }: any) => (
     <div>
       <label className="label">{label}</label>
-      <input
-        className="input"
-        type={opts.type ?? 'text'}
-        placeholder={opts.ph ?? ''}
-        value={(form as any)[k]}
-        onChange={e => handleChange(k, e.target.value)}
-        required={opts.required}
-      />
+      <input className="input" type={type} name={name} placeholder={ph} defaultValue="" />
     </div>
   )
 
@@ -80,29 +57,29 @@ export default function AddCandidateModal() {
         <div className="modal-content" style={{ maxWidth: 620 }}>
           <div className="modal-header">
             <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Add candidate</span>
-            <button onClick={() => setOpen(false)} className="btn btn-sm"><X size={16} /></button>
+            <button type="button" onClick={() => setOpen(false)} className="btn btn-sm"><X size={16} /></button>
           </div>
-          <form onSubmit={submit}>
+          <form ref={formRef} onSubmit={submit}>
             <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {inp('name', 'Full name *', { required: true })}
-              {inp('location', 'Location', { ph: 'San Francisco, CA' })}
-              {inp('work_email', 'Work email', { type: 'email' })}
-              {inp('personal_email', 'Personal email', { type: 'email' })}
-              {inp('work_phone', 'Work phone')}
-              {inp('cell_phone', 'Cell phone')}
-              {inp('linkedin', 'LinkedIn URL')}
-              {inp('current_salary', 'Current salary', { type: 'number', ph: '120000' })}
-              {inp('current_title', 'Current title')}
-              {inp('current_company', 'Current company')}
-              {inp('current_company_url', 'Company URL')}
-              {inp('time_in_current_role', 'Time in role', { ph: '2 years' })}
-              {inp('previous_title', 'Previous title')}
-              {inp('previous_company', 'Previous company')}
-              {inp('previous_dates', 'Previous dates', { ph: 'Jan 2020 - Mar 2022' })}
-              {inp('source_list', 'Source list')}
+              <F label="Full name *" name="name" />
+              <F label="Location" name="location" ph="San Francisco, CA" />
+              <F label="Work email" name="work_email" type="email" />
+              <F label="Personal email" name="personal_email" type="email" />
+              <F label="Work phone" name="work_phone" />
+              <F label="Cell phone" name="cell_phone" />
+              <F label="LinkedIn URL" name="linkedin" />
+              <F label="Current salary" name="current_salary" type="number" ph="120000" />
+              <F label="Current title" name="current_title" />
+              <F label="Current company" name="current_company" />
+              <F label="Company URL" name="current_company_url" />
+              <F label="Time in role" name="time_in_current_role" ph="2 years" />
+              <F label="Previous title" name="previous_title" />
+              <F label="Previous company" name="previous_company" />
+              <F label="Previous dates" name="previous_dates" ph="Jan 2020 - Mar 2022" />
+              <F label="Source list" name="source_list" />
               <div style={{ gridColumn: 'span 2' }}>
                 <label className="label">Tags (comma separated)</label>
-                <input className="input" value={form.tags} onChange={e => handleChange('tags', e.target.value)} placeholder="Engineering, Leadership" />
+                <input className="input" name="tags" placeholder="Engineering, Leadership" defaultValue="" />
               </div>
             </div>
             <div className="modal-footer">
