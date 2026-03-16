@@ -60,7 +60,7 @@ export default function ActivityFeed({ candidateId, currentProfile }: { candidat
       setActivities(acts ?? [])
 
       // Load avatar urls for all unique creators
-      const creatorIds = [...new Set((acts ?? []).map((a: any) => a.created_by).filter(Boolean))]
+      const creatorIds = Array.from(new Set((acts ?? []).map((a: any) => a.created_by).filter(Boolean))) as string[]
       if (creatorIds.length > 0) {
         const { data: profiles } = await (supabase as any)
           .from('profiles').select('id, avatar_url').in('id', creatorIds)
