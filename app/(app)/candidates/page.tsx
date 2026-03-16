@@ -22,10 +22,12 @@ export default function CandidatesPage() {
   const [pageSize, setPageSize] = useState(50)
   const [toast, setToast] = useState<string | null>(null)
   const [lastContacted, setLastContacted] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   const load = async () => {
+    setLoading(true)
     const { data } = await (sb as any).from('candidates').select('*').order('name')
     setCandidates(data ?? [])
     const tags = Array.from(new Set((data ?? []).flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[]
@@ -33,17 +35,26 @@ export default function CandidatesPage() {
     setAllTags(tags)
     setAllLocations(locs)
 
+    // Get last contacted — batch in groups to avoid timeout
     const ids = (data ?? []).map((c: any) => c.id)
-    if (ids.length > 0) {
-      const { data: acts } = await (sb as any)
-        .from('activities').select('candidate_id, created_at')
-        .in('candidate_id', ids).order('created_at', { ascending: false })
-      if (acts) {
-        const map: Record<string, string> = {}
-        acts.forEach((a: any) => { if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at })
-        setLastContacted(map)
+    const map: Record<string, string> = {}
+    // Only fetch for first 500 to avoid timeout, the rest show as "—"
+    const batchIds = ids.slice(0, 500)
+    if (batchIds.length > 0) {
+      for (let i = 0; i < batchIds.length; i += 100) {
+        const chunk = batchIds.slice(i, i + 100)
+        const { data: acts } = await (sb as any)
+          .from('activities').select('candidate_id, created_at')
+          .in('candidate_id', chunk)
+          .order('created_at', { ascending: false })
+          .limit(500)
+        if (acts) {
+          acts.forEach((a: any) => { if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at })
+        }
       }
     }
+    setLastContacted(map)
+    setLoading(false)
   }
 
   useEffect(() => { load() }, [])
@@ -65,9 +76,16 @@ export default function CandidatesPage() {
 
   const sorted = [...filtered].sort((a: any, b: any) => {
     if (sortBy === 'last_contacted') {
-      return (lastContacted[b.id] || '').localeCompare(lastContacted[a.id] || '')
+      const aD = lastContacted[a.id] || '1970'
+      const bD = lastContacted[b.id] || '1970'
+      return bD.localeCompare(aD)
     }
     if (sortBy === 'created_at') return (b.created_at || '').localeCompare(a.created_at || '')
+    if (sortBy === 'has_resume') {
+      const aR = a.resume_url ? 1 : 0
+      const bR = b.resume_url ? 1 : 0
+      return bR - aR
+    }
     return (a.name || '').localeCompare(b.name || '')
   })
 
@@ -107,13 +125,7 @@ export default function CandidatesPage() {
   return (
     <div>
       {toast && <div className="toast toast-success">{toast}</div>}
-
-      {showAddModal && (
-        <AddCandidateModal
-          onClose={() => setShowAddModal(false)}
-          onAdded={() => { setShowAddModal(false); load() }}
-        />
-      )}
+      {showAddModal && <AddCandidateModal onClose={() => setShowAddModal(false)} onAdded={() => { setShowAddModal(false); load() }} />}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
@@ -128,13 +140,8 @@ export default function CandidatesPage() {
 
       {/* Filters */}
       <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input
-          type="search"
-          placeholder="Search keywords (e.g. mechanical new york)..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-          style={{ flex: 1, minWidth: 200 }}
-        />
+        <input type="search" placeholder="Search keywords (e.g. mechanical new york)..." value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }} style={{ flex: 1, minWidth: 200 }} />
         <select value={locationFilter} onChange={(e) => { setLocationFilter(e.target.value); setPage(1) }} style={{ maxWidth: 170 }}>
           <option value="">All locations</option>
           {allLocations.map((l: string) => <option key={l} value={l}>{l}</option>)}
@@ -143,10 +150,11 @@ export default function CandidatesPage() {
           <option value="">All tags</option>
           {allTags.map((t: string) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1) }} style={{ maxWidth: 160 }}>
-          <option value="name">Sort: Name</option>
+        <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1) }} style={{ maxWidth: 175 }}>
+          <option value="name">Sort: Name A–Z</option>
           <option value="last_contacted">Sort: Last Contacted</option>
           <option value="created_at">Sort: Date Added</option>
+          <option value="has_resume">Sort: Has Resume</option>
         </select>
       </div>
 
@@ -174,50 +182,62 @@ export default function CandidatesPage() {
 
       {/* Table */}
       <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 40 }}>
-                  <input type="checkbox" checked={paginated.length > 0 && selected.size === paginated.length} onChange={toggleAll} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                </th>
-                <th>Name</th>
-                <th>Current Role</th>
-                <th className="hide-mobile">Company</th>
-                <th className="hide-mobile">Location</th>
-                <th>Last Contact</th>
-                <th style={{ width: 60 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map((c: any) => (
-                <tr key={c.id} style={{ cursor: 'pointer' }}>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                  </td>
-                  <td onClick={() => router.push(`/candidates/${c.id}`)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="avatar" style={{ background: colorFor(c.name), color: 'white' }}>{initials(c.name)}</div>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
-                    </div>
-                  </td>
-                  <td onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_title || '—'}</td>
-                  <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_company || '—'}</td>
-                  <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.location ? `📍 ${c.location}` : '—'}</td>
-                  <td onClick={() => router.push(`/candidates/${c.id}`)}>
-                    <span style={{ fontSize: 12, color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
-                      {formatLastContact(c.id)}
-                    </span>
-                  </td>
-                  <td>
-                    <Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View →</Link>
-                  </td>
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading candidates...</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>
+                    <input type="checkbox" checked={paginated.length > 0 && selected.size === paginated.length} onChange={toggleAll} style={{ width: 15, height: 15, cursor: 'pointer' }} />
+                  </th>
+                  <th>Name</th>
+                  <th>Current Role</th>
+                  <th className="hide-mobile">Company</th>
+                  <th className="hide-mobile">Location</th>
+                  <th>Last Contact</th>
+                  <th style={{ width: 30, textAlign: 'center' }} title="Resume">📄</th>
+                  <th style={{ width: 50 }}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {paginated.length === 0 && (
+              </thead>
+              <tbody>
+                {paginated.map((c: any) => (
+                  <tr key={c.id} style={{ cursor: 'pointer' }}>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} style={{ width: 15, height: 15, cursor: 'pointer' }} />
+                    </td>
+                    <td onClick={() => router.push(`/candidates/${c.id}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="avatar" style={{ background: colorFor(c.name), color: 'white' }}>{initials(c.name)}</div>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
+                      </div>
+                    </td>
+                    <td onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_title || '—'}</td>
+                    <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_company || '—'}</td>
+                    <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.location ? `📍 ${c.location}` : '—'}</td>
+                    <td onClick={() => router.push(`/candidates/${c.id}`)}>
+                      <span style={{ fontSize: 12, color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
+                        {formatLastContact(c.id)}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }} onClick={() => router.push(`/candidates/${c.id}`)}>
+                      {c.resume_url ? (
+                        <span title="Resume on file" style={{ fontSize: 14 }}>✅</span>
+                      ) : (
+                        <span style={{ fontSize: 14, opacity: 0.2 }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View →</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && paginated.length === 0 && (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <p style={{ color: 'var(--text-tertiary)' }}>{search ? 'No candidates match' : 'No candidates yet'}</p>
           </div>
@@ -227,9 +247,7 @@ export default function CandidatesPage() {
       {/* Pagination */}
       {sorted.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            {((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}
-          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}</span>
           <div style={{ display: 'flex', gap: 4 }}>
             {[25,50,100,250,500].map((s) => (
               <button key={s} onClick={() => { setPageSize(s); setPage(1) }}
@@ -238,9 +256,9 @@ export default function CandidatesPage() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button onClick={() => setPage(Math.max(1, page-1))} disabled={page===1} className="btn btn-sm">←</button>
+            <button onClick={() => setPage(Math.max(1,page-1))} disabled={page===1} className="btn btn-sm">←</button>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{page}/{totalPages||1}</span>
-            <button onClick={() => setPage(Math.min(totalPages, page+1))} disabled={page>=totalPages} className="btn btn-sm">→</button>
+            <button onClick={() => setPage(Math.min(totalPages,page+1))} disabled={page>=totalPages} className="btn btn-sm">→</button>
           </div>
         </div>
       )}
