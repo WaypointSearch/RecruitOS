@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Cannot change your own role' }, { status: 400 })
 
   const admin = createAdminClient()
-  await admin.from('profiles').update({ role }).eq('id', userId)
+  await (admin.from('profiles') as any).update({ role }).eq('id', userId)
 
   return NextResponse.json({ success: true })
 }
