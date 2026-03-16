@@ -21,7 +21,7 @@ export default function Sidebar() {
   const [role, setRole] = useState('user')
   const themeCtx = useTheme()
   const theme = themeCtx.theme
-  const toggle = themeCtx.toggle || themeCtx.toggleTheme
+  const toggle = (themeCtx as any).toggle || (themeCtx as any).toggleTheme
   const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
