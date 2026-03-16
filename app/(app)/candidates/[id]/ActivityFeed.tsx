@@ -1,158 +1,124 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createSupabaseClient } from '@/lib/supabase'
 import { formatDistanceToNow } from 'date-fns'
 import type { Activity, Profile } from '@/types/database'
+import { Phone, Mail, Linkedin, MessageSquare, Voicemail, FileText, Send, AlertCircle } from 'lucide-react'
 
 const QUICK_ACTIONS = [
-  { label: 'Talked to', type: 'called' as const },
-  { label: 'Left voicemail', type: 'voicemail' as const },
-  { label: 'Emailed', type: 'emailed' as const },
-  { label: 'LinkedIn msg', type: 'linkedin' as const },
-  { label: 'Sent text', type: 'texted' as const },
+  { label: 'Talked to', type: 'called' as const, content: 'Talked to candidate' },
+  { label: 'Voicemail', type: 'voicemail' as const, content: 'Left voicemail' },
+  { label: 'Emailed', type: 'emailed' as const, content: 'Sent email' },
+  { label: 'LinkedIn', type: 'linkedin' as const, content: 'Sent LinkedIn message' },
+  { label: 'Text', type: 'texted' as const, content: 'Sent text message' },
 ]
 
-const activityIcon: Record<string, string> = {
-  note: '📝', called: '📞', voicemail: '📬', emailed: '✉️',
-  linkedin: '💼', texted: '💬', stage_change: '🔄', added: '➕'
+const activityIcon: Record<string, any> = {
+  note: FileText, called: Phone, voicemail: Voicemail,
+  emailed: Mail, linkedin: Linkedin, texted: MessageSquare,
+  stage_change: Send, added: FileText,
 }
 
-const activityLabel: Record<string, string> = {
-  called: 'Talked to candidate',
-  voicemail: 'Left voicemail',
-  emailed: 'Sent email',
-  linkedin: 'Sent LinkedIn message',
-  texted: 'Sent text message',
-}
-
-export default function ActivityFeed({
-  candidateId,
-  currentProfile,
-}: {
-  candidateId: string
-  currentProfile: Profile
-}) {
+export default function ActivityFeed({ candidateId, currentProfile }: { candidateId: string; currentProfile: Profile }) {
   const [activities, setActivities] = useState<Activity[]>([])
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
   const supabase = createSupabaseClient()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const loadActivities = useCallback(async () => {
+    setLoading(true)
+    const { data, error: err } = await (supabase as any)
+      .from('activities').select('*').eq('candidate_id', candidateId)
+      .order('created_at', { ascending: false }).limit(50)
+    if (err) setError('Failed to load: ' + err.message)
+    else setActivities(data ?? [])
+    setLoading(false)
+  }, [candidateId])
 
   useEffect(() => {
     loadActivities()
-    // Realtime subscription — all recruiters see updates live
-    const channel = supabase
-      .channel(`activities-${candidateId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'activities',
-        filter: `candidate_id=eq.${candidateId}`,
-      }, payload => {
-        setActivities(prev => [payload.new as Activity, ...prev])
-      })
+    const channel = supabase.channel('activities-' + candidateId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities', filter: 'candidate_id=eq.' + candidateId },
+        (payload: any) => setActivities(prev => [payload.new as Activity, ...prev]))
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [candidateId])
+  }, [candidateId, loadActivities])
 
-  async function loadActivities() {
-    const { data } = await supabase
-      .from('activities')
-      .select('*')
-      .eq('candidate_id', candidateId)
-      .order('created_at', { ascending: false })
-      .limit(50)
-    setActivities(data ?? [])
-  }
-
-  async function logActivity(type: Activity['type'], content?: string) {
+  async function logActivity(type: Activity['type'], content: string) {
     setSaving(true)
-    await (supabase.from('activities') as any).insert({
-      candidate_id: candidateId,
-      type,
-      content: content ?? activityLabel[type] ?? type,
+    setError('')
+    const payload = {
+      candidate_id: candidateId, type, content,
       created_by: currentProfile.id,
-      created_by_name: currentProfile.full_name,
-    })
+      created_by_name: currentProfile.full_name || currentProfile.email,
+    }
+    const { data, error: err } = await (supabase as any).from('activities').insert([payload]).select()
+    if (err) {
+      setError('Save failed: ' + err.message)
+      // Optimistic fallback
+      setActivities(prev => [{ ...payload, id: Date.now().toString(), created_at: new Date().toISOString(), job_id: null } as any, ...prev])
+    }
     setSaving(false)
   }
 
   async function saveNote() {
-    if (!note.trim()) return
-    await logActivity('note', note.trim())
+    const trimmed = note.trim()
+    if (!trimmed) return
+    await logActivity('note', trimmed)
     setNote('')
   }
 
-  async function handleQuickAction(type: Activity['type']) {
-    await logActivity(type)
-  }
-
   return (
-    <div className="card flex flex-col" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-      <div className="px-4 py-3 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-800">Activity & notes</h2>
-      </div>
-
-      {/* Quick action buttons */}
-      <div className="px-4 py-3 border-b border-gray-50">
-        <p className="text-xs text-gray-400 mb-2">Log interaction</p>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_ACTIONS.map(({ label, type }) => (
-            <button
-              key={type}
-              onClick={() => handleQuickAction(type)}
-              disabled={saving}
-              className="px-2.5 py-1 text-xs rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors disabled:opacity-50"
-            >
+    <div className="mac-card" style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 120px)', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Activity & Notes</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {QUICK_ACTIONS.map(({ label, type, content }) => (
+            <button key={type} onClick={() => logActivity(type, content)} disabled={saving}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 100, fontSize: 12, fontWeight: 500, cursor: 'pointer', background: 'var(--surface-sunken)', color: 'var(--text-3)', border: '1px solid var(--border)', fontFamily: 'inherit', transition: 'all 0.15s' }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'var(--green-light)'; el.style.color = 'var(--green-text)'; el.style.borderColor = 'var(--green)' }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'var(--surface-sunken)'; el.style.color = 'var(--text-3)'; el.style.borderColor = 'var(--border)' }}>
               {label}
             </button>
           ))}
         </div>
       </div>
-
-      {/* Note input */}
-      <div className="px-4 py-3 border-b border-gray-100">
-        <textarea
-          ref={textareaRef}
-          value={note}
-          onChange={e => setNote(e.target.value)}
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+        <textarea value={note} onChange={e => setNote(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote() }}
-          className="input resize-none text-sm"
-          rows={3}
-          placeholder="Write a note… (Cmd+Enter to save)"
-        />
-        <div className="flex justify-end mt-2">
-          <button
-            onClick={saveNote}
-            disabled={saving || !note.trim()}
-            className="btn btn-primary btn-sm"
-          >
+          className="input" rows={3} style={{ resize: 'none', fontSize: 13, lineHeight: 1.5 }}
+          placeholder="Write a note… (⌘+Enter to save)" />
+        {error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12, color: 'var(--red-text)', background: 'var(--red-light)', padding: '6px 10px', borderRadius: 6 }}>
+            <AlertCircle size={12} />{error}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <button onClick={saveNote} disabled={saving || !note.trim()} className="btn btn-primary btn-sm">
             {saving ? 'Saving…' : 'Save note'}
           </button>
         </div>
       </div>
-
-      {/* Feed */}
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
-        {activities.length === 0 && (
-          <p className="px-4 py-8 text-sm text-gray-400 text-center">No activity yet</p>
-        )}
-        {activities.map((a: any) => (
-          <div key={a.id} className="px-4 py-3 flex gap-3">
-            <span className="text-base flex-shrink-0 mt-0.5" style={{ fontSize: 14 }}>
-              {activityIcon[a.type] ?? '•'}
-            </span>
-            <div className="flex-1 min-w-0">
-              {a.type === 'note'
-                ? <p className="text-sm text-gray-700 whitespace-pre-wrap">{a.content}</p>
-                : <p className="text-sm text-gray-600">{a.content}</p>
-              }
-              <p className="text-xs text-gray-400 mt-1">
-                {a.created_by_name} · {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-              </p>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading && <p style={{ padding: 16, fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>Loading…</p>}
+        {!loading && activities.length === 0 && <p style={{ padding: '24px 16px', fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>No activity yet. Log an interaction above.</p>}
+        {activities.map((a: any) => {
+          const Icon = activityIcon[a.type] ?? FileText
+          return (
+            <div key={a.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+              <Icon size={13} style={{ color: a.type === 'note' ? 'var(--accent)' : a.type === 'stage_change' ? 'var(--amber)' : 'var(--green)', flexShrink: 0, marginTop: 2 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{a.content}</p>
+                <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 3 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>
+                  {' · '}{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

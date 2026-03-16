@@ -1,79 +1,69 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
+import { MapPin, Search } from 'lucide-react'
 import AddCompanyModal from './AddCompanyModal'
 
-export default async function CompaniesPage() {
+export default async function CompaniesPage({ searchParams }: { searchParams: { q?: string } }) {
   const supabase = createServerComponentClient({ cookies })
-  const { data: companies } = await supabase
-    .from('companies')
-    .select('*, company_contacts(id), jobs(id)')
-    .order('name')
-
-  const clients = companies?.filter(c => c.status === 'Client') ?? []
-  const prospects = companies?.filter(c => c.status === 'Prospect') ?? []
-
+  let query = (supabase as any).from('companies').select('*, company_contacts(id), jobs(id)').order('name')
+  if (searchParams.q) {
+    const q = '%' + searchParams.q + '%'
+    query = query.or('name.ilike.' + q + ',location.ilike.' + q + ',industry.ilike.' + q)
+  }
+  const { data: companies } = await query
+  const clients = (companies ?? []).filter((c: any) => c.status === 'Client')
+  const prospects = (companies ?? []).filter((c: any) => c.status === 'Prospect')
+  const avColors = [['#e8f0fb','#0058b0'],['#eafaf0','#1a7a35'],['#fff5e0','#7d4800'],['#f3effe','#5c2d91'],['#fce8e8','#9b1a14']]
   const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-  const avatarColors = ['bg-blue-100 text-blue-700', 'bg-teal-100 text-teal-700',
-    'bg-amber-100 text-amber-700', 'bg-purple-100 text-purple-700', 'bg-rose-100 text-rose-700']
 
-  const CompanyTable = ({ items, offset = 0 }: { items: typeof companies, offset?: number }) => (
-    <div className="card overflow-hidden mb-6">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100">
-            {['Company', 'Industry', 'Contacts', 'Open jobs', 'Status', ''].map(h => (
-              <th key={h} className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {items?.map((c, i) => (
-            <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-semibold flex-shrink-0 ${avatarColors[(i + offset) % avatarColors.length]}`}>
-                    {initials(c.name)}
+  const CompanyTable = ({ items, offset = 0 }: { items: any[]; offset?: number }) => (
+    <div className="mac-card" style={{ overflow: 'hidden', marginBottom: 20 }}>
+      <table className="mac-table">
+        <thead><tr>{['Company','Location','Industry','Contacts','Jobs','Status',''].map(h => <th key={h}>{h}</th>)}</tr></thead>
+        <tbody>
+          {items.map((c: any, i: number) => {
+            const [bg, fg] = avColors[(i + offset) % avColors.length]
+            return (
+              <tr key={c.id} onClick={() => window.location.href = '/companies/' + c.id}>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(c.name)}</div>
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{c.name}</span>
                   </div>
-                  <Link href={`/companies/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600">
-                    {c.name}
-                  </Link>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-gray-500">{c.industry || '—'}</td>
-              <td className="px-4 py-3 text-gray-600">{(c.company_contacts as any[])?.length ?? 0}</td>
-              <td className="px-4 py-3 text-gray-600">{(c.jobs as any[])?.length ?? 0}</td>
-              <td className="px-4 py-3">
-                <span className={`badge ${c.status === 'Client' ? 'badge-green' : 'badge-amber'}`}>
-                  {c.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <Link href={`/companies/${c.id}`} className="text-xs text-blue-600 hover:underline">View →</Link>
-              </td>
-            </tr>
-          ))}
-          {items?.length === 0 && (
-            <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">None yet</td></tr>
-          )}
+                </td>
+                <td>{c.location ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><MapPin size={11} style={{ color: 'var(--text-4)' }} />{c.location}</span> : '—'}</td>
+                <td style={{ color: 'var(--text-3)' }}>{c.industry || '—'}</td>
+                <td style={{ color: 'var(--text-3)' }}>{(c.company_contacts as any[])?.length ?? 0}</td>
+                <td style={{ color: 'var(--text-3)' }}>{(c.jobs as any[])?.length ?? 0}</td>
+                <td><span className={'badge ' + (c.status === 'Client' ? 'badge-green' : 'badge-amber')}>{c.status}</span></td>
+                <td style={{ textAlign: 'right' }}><Link href={'/companies/' + c.id} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }} onClick={e => e.stopPropagation()}>View →</Link></td>
+              </tr>
+            )
+          })}
+          {items.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-4)', fontSize: 13 }}>None yet</td></tr>}
         </tbody>
       </table>
     </div>
   )
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-semibold text-gray-900">Companies</h1>
+    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>Companies</h1>
         <AddCompanyModal />
       </div>
-      <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-        Clients ({clients.length})
-      </h2>
+      <form method="GET" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div className="search-bar" style={{ flex: 1, maxWidth: 360 }}>
+          <Search size={13} />
+          <input name="q" defaultValue={searchParams.q} placeholder="Search by name, location, industry..." />
+        </div>
+        <button type="submit" className="btn btn-sm btn-primary">Search</button>
+        {searchParams.q && <Link href="/companies" className="btn btn-sm">Clear</Link>}
+      </form>
+      <div className="section-title">Clients ({clients.length})</div>
       <CompanyTable items={clients} />
-      <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-        Prospects ({prospects.length})
-      </h2>
+      <div className="section-title">Prospects ({prospects.length})</div>
       <CompanyTable items={prospects} offset={clients.length} />
     </div>
   )

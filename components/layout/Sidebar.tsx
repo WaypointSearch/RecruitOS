@@ -2,12 +2,9 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createSupabaseClient } from '@/lib/supabase'
+import { useTheme } from '@/contexts/ThemeContext'
 import type { Profile } from '@/types/database'
-import {
-  LayoutDashboard, Users, Building2, Briefcase,
-  KanbanSquare, Upload, Settings, LogOut
-} from 'lucide-react'
-import { clsx } from 'clsx'
+import { LayoutDashboard, Users, Building2, Briefcase, KanbanSquare, Upload, Settings, LogOut, Moon, Sun } from 'lucide-react'
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -21,6 +18,7 @@ const nav = [
 export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { theme, toggle } = useTheme()
   const supabase = createSupabaseClient()
 
   async function signOut() {
@@ -29,56 +27,48 @@ export default function Sidebar({ profile }: { profile: Profile }) {
     router.refresh()
   }
 
-  const initials = profile.full_name
-    .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'
+  const initials = (profile.full_name || '?').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
   return (
-    <aside className="w-52 min-w-[13rem] h-screen bg-white border-r border-gray-100 flex flex-col">
-      <div className="px-4 py-4 border-b border-gray-100">
-        <span className="text-lg font-bold text-gray-900">
-          Recruit<span className="text-blue-600">OS</span>
-        </span>
+    <aside style={{ width: 200, minWidth: 200, height: '100vh', background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text)' }}>
+          Recruit<span style={{ color: 'var(--accent)' }}>OS</span>
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 1, fontWeight: 500 }}>RECRUITING CRM</div>
       </div>
-
-      <nav className="flex-1 py-3 space-y-0.5 px-2">
+      <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
         {nav.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href}
-            className={clsx(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
-              pathname === href || pathname.startsWith(href + '/')
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            )}>
-            <Icon size={16} />
-            {label}
+          <Link key={href} href={href} className={`sidebar-link${isActive(href) ? ' active' : ''}`}>
+            <Icon size={15} strokeWidth={isActive(href) ? 2.2 : 1.8} />{label}
           </Link>
         ))}
         {profile.role === 'admin' && (
-          <Link href="/settings"
-            className={clsx(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
-              pathname === '/settings'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            )}>
-            <Settings size={16} />
-            Settings
+          <Link href="/settings" className={`sidebar-link${pathname === '/settings' ? ' active' : ''}`}>
+            <Settings size={15} />Settings
           </Link>
         )}
       </nav>
-
-      <div className="p-3 border-t border-gray-100">
-        <div className="flex items-center gap-2.5 px-2 py-1.5">
-          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold flex items-center justify-center flex-shrink-0">
+      <div style={{ padding: '10px 8px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-3)', fontWeight: 500 }}>
+            {theme === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+            {theme === 'dark' ? 'Dark' : 'Light'}
+          </div>
+          <div onClick={toggle} style={{ width: 36, height: 20, borderRadius: 10, background: theme === 'dark' ? 'var(--green)' : 'var(--border-strong)', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+            <div style={{ position: 'absolute', top: 2, left: 2, width: 16, height: 16, background: 'white', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'transform 0.2s', transform: theme === 'dark' ? 'translateX(16px)' : 'none' }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 8px' }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-gray-400 capitalize">{profile.role}</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.full_name || profile.email}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-4)', textTransform: 'capitalize' }}>{profile.role}</div>
           </div>
-          <button onClick={signOut} className="text-gray-400 hover:text-gray-600" title="Sign out">
-            <LogOut size={14} />
-          </button>
+          <button onClick={signOut} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 4 }}><LogOut size={14} /></button>
         </div>
       </div>
     </aside>
