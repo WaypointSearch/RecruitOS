@@ -42,18 +42,18 @@ export default function CandidateDetailPage() {
     ['Previous Dates', candidate.previous_dates],
   ]
 
+  // Reordered: Cell Phone | Work Phone, Work Email | Personal Email, LinkedIn | Company URL
   const contactFields = [
-    ['Work Email', candidate.work_email, 'mailto:'],
-    ['Personal Email', candidate.personal_email || candidate.email, 'mailto:'],
     ['Cell Phone', candidate.cell_phone || candidate.phone, 'tel:'],
     ['Work Phone', candidate.work_phone, 'tel:'],
+    ['Work Email', candidate.work_email, 'mailto:'],
+    ['Personal Email', candidate.personal_email || candidate.email, 'mailto:'],
     ['LinkedIn', candidate.linkedin, ''],
     ['Company URL', candidate.current_company_url, ''],
   ]
 
   return (
     <div style={{ maxWidth: '100%' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <Link href="/candidates" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>← Candidates</Link>
         <h1 style={{ fontSize: 20, fontWeight: 700, flex: 1 }}>{candidate.name}</h1>
@@ -61,15 +61,11 @@ export default function CandidateDetailPage() {
         <DeleteCandidateButton candidateId={id} candidateName={candidate.name} onDeleted={() => router.push('/candidates')} />
       </div>
 
-      {editing && (
-        <EditCandidateModal candidate={candidate} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load() }} />
-      )}
+      {editing && <EditCandidateModal candidate={candidate} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load() }} />}
 
       <div className="candidate-profile-grid">
-        {/* Left */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
 
-          {/* Contact */}
           <div className="card" style={{ padding: 14 }}>
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Contact Info</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -85,32 +81,20 @@ export default function CandidateDetailPage() {
             </div>
           </div>
 
-          {/* Professional */}
           <div className="card" style={{ padding: 14 }}>
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Professional Details</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {fields.map(([label, val]) => (
                 <div key={label as string}>
                   <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</p>
-                  <p style={{
-                    fontSize: 13,
-                    color: val ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    fontWeight: (label as string).includes('Fee') ? 700 : 400,
-                  }}>{(val as string) || '—'}</p>
+                  <p style={{ fontSize: 13, color: val ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: (label as string).includes('Fee') ? 700 : 400 }}>{(val as string) || '—'}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Resume */}
-          <ResumeUpload
-            candidateId={id}
-            currentUrl={candidate.resume_url}
-            currentName={candidate.resume_name}
-            onUploaded={load}
-          />
+          <ResumeUpload candidateId={id} currentUrl={candidate.resume_url} currentName={candidate.resume_name} onUploaded={load} />
 
-          {/* Tags */}
           {candidate.tags?.length > 0 && (
             <div className="card" style={{ padding: 14 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tags</h3>
@@ -120,7 +104,6 @@ export default function CandidateDetailPage() {
             </div>
           )}
 
-          {/* Pipeline */}
           {pipeline.length > 0 && (
             <div className="card" style={{ padding: 14 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Pipeline Status</h3>
@@ -134,12 +117,9 @@ export default function CandidateDetailPage() {
           )}
         </div>
 
-        {/* Right — Activity */}
         <div className="card" style={{ padding: 12, position: 'sticky', top: 16, maxHeight: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Activity</h3>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <ActivityFeed candidateId={id} />
-          </div>
+          <div style={{ flex: 1, minHeight: 0 }}><ActivityFeed candidateId={id} /></div>
         </div>
       </div>
     </div>

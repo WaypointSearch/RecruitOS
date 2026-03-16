@@ -9,6 +9,7 @@ export default function CandidatesPage() {
   const sb = useRef(createClientComponentClient()).current
   const router = useRouter()
   const [candidates, setCandidates] = useState<any[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [allTags, setAllTags] = useState<string[]>([])
   const [allLocations, setAllLocations] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -28,30 +29,45 @@ export default function CandidatesPage() {
 
   const load = async () => {
     setLoading(true)
-    const { data } = await (sb as any).from('candidates').select('*').order('name')
-    setCandidates(data ?? [])
-    const tags = Array.from(new Set((data ?? []).flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[]
-    const locs = Array.from(new Set((data ?? []).map((c: any) => c.location).filter(Boolean))).sort() as string[]
+
+    // Get accurate total count first
+    const { count } = await (sb as any).from('candidates').select('id', { count: 'exact', head: true })
+    setTotalCount(count || 0)
+
+    // Fetch ALL candidates — Supabase default limit is 1000, so we paginate
+    let all: any[] = []
+    let from = 0
+    const batchSize = 1000
+    while (true) {
+      const { data } = await (sb as any).from('candidates')
+        .select('*')
+        .order('name')
+        .range(from, from + batchSize - 1)
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < batchSize) break
+      from += batchSize
+    }
+
+    setCandidates(all)
+
+    const tags = Array.from(new Set(all.flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[]
+    const locs = Array.from(new Set(all.map((c: any) => c.location).filter(Boolean))).sort() as string[]
     setAllTags(tags)
     setAllLocations(locs)
 
-    // Get last contacted — batch in groups to avoid timeout
-    const ids = (data ?? []).map((c: any) => c.id)
+    // Last contacted — batch to avoid timeout
+    const ids = all.map((c: any) => c.id)
     const map: Record<string, string> = {}
-    // Only fetch for first 500 to avoid timeout, the rest show as "—"
     const batchIds = ids.slice(0, 500)
-    if (batchIds.length > 0) {
-      for (let i = 0; i < batchIds.length; i += 100) {
-        const chunk = batchIds.slice(i, i + 100)
-        const { data: acts } = await (sb as any)
-          .from('activities').select('candidate_id, created_at')
-          .in('candidate_id', chunk)
-          .order('created_at', { ascending: false })
-          .limit(500)
-        if (acts) {
-          acts.forEach((a: any) => { if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at })
-        }
-      }
+    for (let i = 0; i < batchIds.length; i += 100) {
+      const chunk = batchIds.slice(i, i + 100)
+      const { data: acts } = await (sb as any)
+        .from('activities').select('candidate_id, created_at')
+        .in('candidate_id', chunk)
+        .order('created_at', { ascending: false })
+        .limit(500)
+      if (acts) acts.forEach((a: any) => { if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at })
     }
     setLastContacted(map)
     setLoading(false)
@@ -127,10 +143,9 @@ export default function CandidatesPage() {
       {toast && <div className="toast toast-success">{toast}</div>}
       {showAddModal && <AddCandidateModal onClose={() => setShowAddModal(false)} onAdded={() => { setShowAddModal(false); load() }} />}
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
-          Candidates <span style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-tertiary)' }}>({sorted.length})</span>
+          Candidates <span style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-tertiary)' }}>({totalCount})</span>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <Link href="/import" className="btn btn-sm" style={{ textDecoration: 'none' }}>⬆ Import CSV</Link>
@@ -138,7 +153,6 @@ export default function CandidatesPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <input type="search" placeholder="Search keywords (e.g. mechanical new york)..." value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }} style={{ flex: 1, minWidth: 200 }} />
@@ -158,7 +172,6 @@ export default function CandidatesPage() {
         </select>
       </div>
 
-      {/* Bulk bar */}
       {selected.size > 0 && (
         <div className="card" style={{ padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, background: 'var(--accent-bg)', borderColor: 'var(--accent)' }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-text)' }}>{selected.size} selected</span>
@@ -168,39 +181,28 @@ export default function CandidatesPage() {
       )}
 
       {confirmBulkDelete && (
-        <div className="modal-overlay">
-          <div className="confirm-dialog">
-            <h3>Delete {selected.size} Candidates?</h3>
-            <p>This cannot be undone.</p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button onClick={bulkDelete} className="btn btn-danger">Yes, Delete</button>
-              <button onClick={() => setConfirmBulkDelete(false)} className="btn">Cancel</button>
-            </div>
+        <div className="modal-overlay"><div className="confirm-dialog">
+          <h3>Delete {selected.size} Candidates?</h3><p>This cannot be undone.</p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button onClick={bulkDelete} className="btn btn-danger">Yes, Delete</button>
+            <button onClick={() => setConfirmBulkDelete(false)} className="btn">Cancel</button>
           </div>
-        </div>
+        </div></div>
       )}
 
-      {/* Table */}
       <div className="card" style={{ overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading candidates...</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 36 }}>
-                    <input type="checkbox" checked={paginated.length > 0 && selected.size === paginated.length} onChange={toggleAll} style={{ width: 15, height: 15, cursor: 'pointer' }} />
-                  </th>
-                  <th>Name</th>
-                  <th>Current Role</th>
-                  <th className="hide-mobile">Company</th>
-                  <th className="hide-mobile">Location</th>
-                  <th>Last Contact</th>
-                  <th style={{ width: 30, textAlign: 'center' }} title="Resume">📄</th>
-                  <th style={{ width: 50 }}></th>
-                </tr>
-              </thead>
+              <thead><tr>
+                <th style={{ width: 36 }}><input type="checkbox" checked={paginated.length > 0 && selected.size === paginated.length} onChange={toggleAll} style={{ width: 15, height: 15, cursor: 'pointer' }} /></th>
+                <th>Name</th><th>Current Role</th><th className="hide-mobile">Company</th>
+                <th className="hide-mobile">Location</th><th>Last Contact</th>
+                <th style={{ width: 30, textAlign: 'center' }} title="Resume">📄</th>
+                <th style={{ width: 50 }}></th>
+              </tr></thead>
               <tbody>
                 {paginated.map((c: any) => (
                   <tr key={c.id} style={{ cursor: 'pointer' }}>
@@ -217,20 +219,12 @@ export default function CandidatesPage() {
                     <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.current_company || '—'}</td>
                     <td className="hide-mobile" onClick={() => router.push(`/candidates/${c.id}`)}>{c.location ? `📍 ${c.location}` : '—'}</td>
                     <td onClick={() => router.push(`/candidates/${c.id}`)}>
-                      <span style={{ fontSize: 12, color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
-                        {formatLastContact(c.id)}
-                      </span>
+                      <span style={{ fontSize: 12, color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>{formatLastContact(c.id)}</span>
                     </td>
                     <td style={{ textAlign: 'center' }} onClick={() => router.push(`/candidates/${c.id}`)}>
-                      {c.resume_url ? (
-                        <span title="Resume on file" style={{ fontSize: 14 }}>✅</span>
-                      ) : (
-                        <span style={{ fontSize: 14, opacity: 0.2 }}>—</span>
-                      )}
+                      {c.resume_url ? <span title="Resume on file" style={{ fontSize: 14 }}>✅</span> : <span style={{ fontSize: 14, opacity: 0.2 }}>—</span>}
                     </td>
-                    <td>
-                      <Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View →</Link>
-                    </td>
+                    <td><Link href={`/candidates/${c.id}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View →</Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -238,21 +232,16 @@ export default function CandidatesPage() {
           </div>
         )}
         {!loading && paginated.length === 0 && (
-          <div style={{ padding: 40, textAlign: 'center' }}>
-            <p style={{ color: 'var(--text-tertiary)' }}>{search ? 'No candidates match' : 'No candidates yet'}</p>
-          </div>
+          <div style={{ padding: 40, textAlign: 'center' }}><p style={{ color: 'var(--text-tertiary)' }}>{search ? 'No candidates match' : 'No candidates yet'}</p></div>
         )}
       </div>
 
-      {/* Pagination */}
       {sorted.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}</span>
           <div style={{ display: 'flex', gap: 4 }}>
             {[25,50,100,250,500].map((s) => (
-              <button key={s} onClick={() => { setPageSize(s); setPage(1) }}
-                className={`btn btn-sm ${pageSize === s ? 'btn-primary' : ''}`}
-                style={{ padding: '3px 8px', fontSize: 11 }}>{s}</button>
+              <button key={s} onClick={() => { setPageSize(s); setPage(1) }} className={`btn btn-sm ${pageSize === s ? 'btn-primary' : ''}`} style={{ padding: '3px 8px', fontSize: 11 }}>{s}</button>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
