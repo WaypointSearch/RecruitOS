@@ -1,92 +1,221 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { createSupabaseClient } from '@/lib/supabase'
-import Link from 'next/link'
-import { MapPin, Search, X } from 'lucide-react'
-import AddCompanyModal from './AddCompanyModal'
+import { useEffect, useState, useRef } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 
 export default function CompaniesPage() {
+  const sb = useRef(createClientComponentClient()).current
+  const router = useRouter()
   const [companies, setCompanies] = useState<any[]>([])
-  const [q, setQ] = useState('')
-  const [loading, setLoading] = useState(true)
-  const supabase = createSupabaseClient()
+  const [users, setUsers] = useState<any[]>([])
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<string>('all')
+  const [adding, setAdding] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [q])
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
-  async function load() {
-    setLoading(true)
-    let query = (supabase as any).from('companies')
-      .select('*, company_contacts(id), jobs(id)')
-      .order('name')
-    if (q) {
-      const qp = '%' + q + '%'
-      query = query.or('name.ilike.' + qp + ',location.ilike.' + qp + ',industry.ilike.' + qp)
-    }
-    const { data } = await query
+  const load = async () => {
+    const { data } = await (sb as any).from('companies').select('*').order('name')
     setCompanies(data ?? [])
-    setLoading(false)
+    const { data: u } = await (sb as any).from('profiles').select('id, full_name, email, avatar_url')
+    setUsers(u ?? [])
   }
 
-  const clients = companies.filter(c => c.status === 'Client')
-  const prospects = companies.filter(c => c.status === 'Prospect')
-  const avColors = [['#e8f0fb','#0058b0'],['#eafaf0','#1a7a35'],['#fff5e0','#7d4800'],['#f3effe','#5c2d91'],['#fce8e8','#9b1a14']]
-  const initials = (name: string) => name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  useEffect(() => { load() }, [])
 
-  const CompanyTable = ({ items, offset = 0 }: { items: any[]; offset?: number }) => (
-    <div className="mac-card" style={{ overflow: 'hidden', marginBottom: 20 }}>
-      <table className="mac-table">
-        <thead><tr>{['Company','Location','Industry','Contacts','Jobs','Status',''].map(h => <th key={h}>{h}</th>)}</tr></thead>
-        <tbody>
-          {items.map((c: any, i: number) => {
-            const [bg, fg] = avColors[(i + offset) % avColors.length]
-            return (
-              <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/companies/' + c.id}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(c.name)}</div>
-                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{c.name}</span>
-                  </div>
-                </td>
-                <td>{c.location ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><MapPin size={11} style={{ color: 'var(--text-4)' }} />{c.location}</span> : <span style={{ color: 'var(--text-4)' }}>—</span>}</td>
-                <td style={{ color: 'var(--text-3)' }}>{c.industry || '—'}</td>
-                <td style={{ color: 'var(--text-3)' }}>{(c.company_contacts as any[])?.length ?? 0}</td>
-                <td style={{ color: 'var(--text-3)' }}>{(c.jobs as any[])?.length ?? 0}</td>
-                <td><span className={'badge ' + (c.status === 'Client' ? 'badge-green' : 'badge-amber')}>{c.status}</span></td>
-                <td style={{ textAlign: 'right' }}>
-                  <Link href={'/companies/' + c.id} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}
-                    onClick={e => e.stopPropagation()}>View →</Link>
-                </td>
-              </tr>
-            )
-          })}
-          {items.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-4)', fontSize: 13 }}>None yet</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  )
+  const addCompany = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const { data: { user } } = await sb.auth.getUser()
+    const obj: any = { created_by: user?.id }
+    for (const [k, v] of fd.entries()) obj[k] = v || null
+    await (sb as any).from('companies').insert([obj])
+    showToast('Company added')
+    setAdding(false)
+    load()
+  }
+
+  const filtered = companies.filter((c: any) => {
+    const q = search.toLowerCase()
+    const matchesSearch = !q || c.name?.toLowerCase().includes(q) || c.location?.toLowerCase().includes(q) || c.industry?.toLowerCase().includes(q)
+    const matchesFilter = filter === 'all' || c.status === filter
+    return matchesSearch && matchesFilter
+  })
+
+  const clients = filtered.filter((c: any) => c.status === 'Client')
+  const prospects = filtered.filter((c: any) => c.status === 'Prospect')
+
+  const getManager = (id: string) => users.find((u: any) => u.id === id)
+
+  const CompanyRow = ({ c }: { c: any }) => {
+    const mgr = getManager(c.account_manager_id)
+    return (
+      <tr
+        key={c.id}
+        onClick={() => router.push(`/companies/${c.id}`)}
+        style={{ cursor: 'pointer' }}
+      >
+        <td>
+          <p style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</p>
+          {c.industry && <p style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{c.industry}</p>}
+        </td>
+        <td className="hide-mobile" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.location || '—'}</td>
+        <td className="hide-mobile">
+          {mgr ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="avatar" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)', width: 22, height: 22, fontSize: 9 }}>
+                {mgr.avatar_url
+                  ? <img src={mgr.avatar_url} alt="" />
+                  : (mgr.full_name || mgr.email || '?').charAt(0).toUpperCase()
+                }
+              </div>
+              <span style={{ fontSize: 12 }}>{mgr.full_name || mgr.email?.split('@')[0]}</span>
+            </div>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>—</span>
+          )}
+        </td>
+        <td>
+          <span className={`badge ${c.status === 'Client' ? 'badge-green' : 'badge-yellow'}`}>{c.status}</span>
+        </td>
+      </tr>
+    )
+  }
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', background: 'var(--bg)', minHeight: '100vh' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>Companies</h1>
-        <AddCompanyModal onAdded={load} />
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <div className="search-bar" style={{ flex: 1, maxWidth: 360 }}>
-          <Search size={13} />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, location, industry..." />
-          {q && <button onClick={() => setQ('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 0, display: 'flex' }}><X size={13} /></button>}
+    <div>
+      {toast && <div className="toast toast-success">{toast}</div>}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700 }}>Companies</h1>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="search"
+            placeholder="Search name, location, industry..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ maxWidth: 240 }}
+          />
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 130 }}>
+            <option value="all">All</option>
+            <option value="Client">Clients</option>
+            <option value="Prospect">Prospects</option>
+          </select>
+          <button onClick={() => setAdding(!adding)} className="btn btn-primary btn-sm">+ Add Company</button>
         </div>
       </div>
-      {loading
-        ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-4)', fontSize: 13 }}>Loading...</div>
-        : <>
-          <div className="section-title">Clients ({clients.length})</div>
-          <CompanyTable items={clients} />
-          <div className="section-title">Prospects ({prospects.length})</div>
-          <CompanyTable items={prospects} offset={clients.length} />
-        </>
-      }
+
+      {adding && (
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>New Company</h3>
+          <form onSubmit={addCompany} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Company Name *</label>
+              <input name="name" required />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Status</label>
+              <select name="status"><option>Prospect</option><option>Client</option></select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Location</label>
+              <input name="location" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Industry</label>
+              <input name="industry" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Website</label>
+              <input name="website" type="url" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Company URL</label>
+              <input name="company_url" type="url" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Corporate Phone</label>
+              <input name="corporate_phone" type="tel" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Local Phone</label>
+              <input name="local_phone" type="tel" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Account Manager</label>
+              <select name="account_manager_id">
+                <option value="">None</option>
+                {users.map((u: any) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Notes</label>
+              <input name="notes" />
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+              <button type="submit" className="btn btn-primary btn-sm">Create Company</button>
+              <button type="button" onClick={() => setAdding(false)} className="btn btn-sm">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Clients Section */}
+      {clients.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600 }}>Clients</h2>
+            <span className="badge badge-green">{clients.length}</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th className="hide-mobile">Location</th>
+                  <th className="hide-mobile">Account Manager</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((c: any) => <CompanyRow key={c.id} c={c} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Prospects Section */}
+      {prospects.length > 0 && (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600 }}>Prospects</h2>
+            <span className="badge badge-yellow">{prospects.length}</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th className="hide-mobile">Location</th>
+                  <th className="hide-mobile">Account Manager</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prospects.map((c: any) => <CompanyRow key={c.id} c={c} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 && (
+        <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-tertiary)' }}>{search ? 'No companies match your search' : 'No companies yet'}</p>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,56 +1,34 @@
 'use client'
-import { useState } from 'react'
-import { createSupabaseClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-import { Trash2, X, AlertTriangle } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-export default function DeleteCandidateButton({ candidateId }: { candidateId: string }) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = createSupabaseClient()
+export default function DeleteCandidateButton({ candidateId, candidateName, onDeleted }: { candidateId: string; candidateName: string; onDeleted: () => void }) {
+  const sb = useRef(createClientComponentClient()).current
+  const [confirming, setConfirming] = useState(false)
 
-  async function doDelete() {
-    setLoading(true)
-    await (supabase as any).from('candidates').delete().eq('id', candidateId)
-    setLoading(false)
-    router.push('/candidates')
-    router.refresh()
+  const handleDelete = async () => {
+    await (sb as any).from('candidates').delete().eq('id', candidateId)
+    onDeleted()
+  }
+
+  if (confirming) {
+    return (
+      <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setConfirming(false)}>
+        <div className="confirm-dialog">
+          <h3>Delete Candidate?</h3>
+          <p>Are you sure you want to delete {candidateName}? This cannot be undone.</p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button onClick={handleDelete} className="btn btn-danger">Yes, Delete</button>
+            <button onClick={() => setConfirming(false)} className="btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <>
-      <button className="btn btn-sm" onClick={() => setOpen(true)}
-        style={{ color: 'var(--red-text)', borderColor: 'transparent', background: 'var(--red-light)' }}>
-        <Trash2 size={12} />
-      </button>
-      {open && (
-        <>
-          <div className="modal-backdrop" onClick={() => setOpen(false)} />
-          <div className="modal-box">
-            <div className="modal-content" style={{ maxWidth: 400 }}>
-              <div className="modal-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-text)' }}>
-                  <AlertTriangle size={16} /><span style={{ fontSize: 15, fontWeight: 600 }}>Delete candidate?</span>
-                </div>
-                <button onClick={() => setOpen(false)} className="btn btn-sm"><X size={14} /></button>
-              </div>
-              <div className="modal-body">
-                <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                  This permanently deletes all their activity, notes, and pipeline assignments.{' '}
-                  <strong style={{ color: 'var(--red-text)' }}>This cannot be undone.</strong>
-                </p>
-              </div>
-              <div className="modal-footer">
-                <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={doDelete} disabled={loading}>
-                  <Trash2 size={13} />{loading ? 'Deleting...' : 'Yes, delete candidate'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </>
+    <button onClick={() => setConfirming(true)} className="btn btn-sm" style={{ color: 'var(--danger)' }}>
+      🗑 Delete
+    </button>
   )
 }

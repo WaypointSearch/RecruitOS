@@ -1,166 +1,233 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { createSupabaseClient } from '@/lib/supabase'
-import { formatDistanceToNow } from 'date-fns'
-import type { Activity, Profile } from '@/types/database'
-import { Phone, Mail, Linkedin, MessageSquare, Voicemail, FileText, Send, AlertCircle, CheckCircle } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-const QUICK_ACTIONS = [
-  { label: 'Talked to', type: 'called' as const, content: 'Talked to candidate' },
-  { label: 'Voicemail', type: 'voicemail' as const, content: 'Left voicemail' },
-  { label: 'Emailed', type: 'emailed' as const, content: 'Sent email' },
-  { label: 'LinkedIn', type: 'linkedin' as const, content: 'Sent LinkedIn message' },
-  { label: 'Text', type: 'texted' as const, content: 'Sent text message' },
+const quickActions = [
+  { label: 'Talked to', type: 'called', icon: '📞' },
+  { label: 'Voicemail', type: 'voicemail', icon: '📩' },
+  { label: 'Emailed', type: 'email', icon: '✉️' },
+  { label: 'LinkedIn', type: 'linkedin', icon: '💼' },
+  { label: 'Text', type: 'text', icon: '💬' },
 ]
 
-const activityIcon: Record<string, any> = {
-  note: FileText, called: Phone, voicemail: Voicemail,
-  emailed: Mail, linkedin: Linkedin, texted: MessageSquare,
-  stage_change: Send, added: FileText,
-}
-
-const iconColor: Record<string, string> = {
-  note: 'var(--accent)', stage_change: 'var(--amber)',
-  called: 'var(--green)', voicemail: 'var(--green)', emailed: 'var(--green)',
-  linkedin: 'var(--green)', texted: 'var(--green)', added: 'var(--text-4)',
-}
-
-function UserAvatar({ name, avatarUrl, size = 24 }: { name: string; avatarUrl?: string | null; size?: number }) {
-  const initials = (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-  }
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent-text)', fontSize: size * 0.38, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      {initials}
-    </div>
-  )
-}
-
-export default function ActivityFeed({ candidateId, currentProfile }: { candidateId: string; currentProfile: Profile & { avatar_url?: string | null } }) {
-  const [activities, setActivities] = useState<(Activity & { profiles?: { avatar_url?: string | null } | null })[]>([])
-  const [profileAvatars, setProfileAvatars] = useState<Record<string, string | null>>({})
+export default function ActivityFeed({ candidateId, jobId }: { candidateId: string; jobId?: string }) {
+  const supabaseRef = useRef(createClientComponentClient())
+  const [activities, setActivities] = useState<any[]>([])
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [toast, setToast] = useState('')
-  const [loading, setLoading] = useState(true)
-  const supabaseRef = useRef(createSupabaseClient())
-  const supabase = supabaseRef.current
+  const [toast, setToast] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [avatars, setAvatars] = useState<Record<string, string>>({})
+  const noteRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    async function init() {
-      setLoading(true)
-      // Load activities
-      const { data: acts, error: err } = await (supabase as any)
-        .from('activities').select('*')
-        .eq('candidate_id', candidateId)
-        .order('created_at', { ascending: false }).limit(50)
-      if (err) { setError('Failed to load: ' + err.message); setLoading(false); return }
-      setActivities(acts ?? [])
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
 
-      // Load avatar urls for all unique creators
-      const creatorIds = Array.from(new Set((acts ?? []).map((a: any) => a.created_by).filter(Boolean))) as string[]
-      if (creatorIds.length > 0) {
-        const { data: profiles } = await (supabase as any)
-          .from('profiles').select('id, avatar_url').in('id', creatorIds)
-        const map: Record<string, string | null> = {}
-        ;(profiles ?? []).forEach((p: any) => { map[p.id] = p.avatar_url ?? null })
-        setProfileAvatars(map)
+  const loadActivities = useCallback(async () => {
+    const sb = supabaseRef.current
+    const { data, error } = await (sb as any)
+      .from('activities')
+      .select('*')
+      .eq('candidate_id', candidateId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (error) { console.error('Load activities error:', error); return }
+    setActivities(data ?? [])
+
+    // Load avatars
+    const ids = Array.from(new Set((data ?? []).map((a: any) => a.created_by).filter(Boolean)))
+    if (ids.length > 0) {
+      const { data: profiles } = await (sb as any)
+        .from('profiles').select('id, avatar_url').in('id', ids)
+      if (profiles) {
+        const map: Record<string, string> = {}
+        profiles.forEach((p: any) => { if (p.avatar_url) map[p.id] = p.avatar_url })
+        setAvatars(map)
       }
-      setLoading(false)
     }
-    init()
-
-    const channel = supabase.channel('activities-' + candidateId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities', filter: 'candidate_id=eq.' + candidateId },
-        (payload: any) => setActivities(prev => [payload.new as Activity, ...prev]))
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
   }, [candidateId])
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
+  useEffect(() => {
+    loadActivities()
+    const channel = supabaseRef.current
+      .channel(`activities-${candidateId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activities', filter: `candidate_id=eq.${candidateId}` }, () => {
+        loadActivities()
+      })
+      .subscribe()
+    return () => { supabaseRef.current.removeChannel(channel) }
+  }, [candidateId, loadActivities])
 
-  async function logActivity(type: Activity['type'], content: string) {
-    setSaving(true); setError('')
-    const { error: err } = await (supabase as any).from('activities').insert([{
-      candidate_id: candidateId, type, content,
-      created_by: currentProfile.id,
-      created_by_name: currentProfile.full_name || currentProfile.email,
+  const logActivity = async (type: string, content?: string) => {
+    setSaving(true)
+    const sb = supabaseRef.current
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) { setSaving(false); return }
+
+    const { error } = await (sb as any).from('activities').insert([{
+      candidate_id: candidateId,
+      job_id: jobId || null,
+      type,
+      content: content || null,
+      created_by: user.id,
+      created_by_name: user.email?.split('@')[0] || 'Unknown',
     }])
-    if (err) setError('Save failed: ' + err.message)
-    else showToast('Logged: ' + content)
+
+    if (error) {
+      console.error('Save activity error:', error)
+      showToast('Error saving — check console')
+    } else {
+      showToast(type === 'note' ? 'Note saved' : `Logged: ${type}`)
+      if (type === 'note') setNote('')
+    }
     setSaving(false)
   }
 
-  async function saveNote() {
-    const trimmed = note.trim()
-    if (!trimmed) return
-    await logActivity('note', trimmed)
-    setNote('')
+  const deleteActivity = async (id: string) => {
+    const sb = supabaseRef.current
+    const { error } = await (sb as any).from('activities').delete().eq('id', id)
+    if (error) {
+      showToast('Error deleting')
+    } else {
+      setActivities((prev) => prev.filter((a) => a.id !== id))
+      showToast('Activity deleted')
+    }
+    setConfirmDelete(null)
   }
 
+  const saveNote = () => {
+    if (!note.trim()) return
+    logActivity('note', note.trim())
+  }
+
+  const typeLabel = (t: string) => {
+    const map: Record<string, string> = {
+      note: '📝 Note', called: '📞 Called', voicemail: '📩 Voicemail',
+      email: '✉️ Emailed', linkedin: '💼 LinkedIn', text: '💬 Text',
+      stage_change: '🔄 Stage Change',
+    }
+    return map[t] || t
+  }
+
+  const initials = (name: string) => name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?'
+
   return (
-    <div className="mac-card" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)', overflow: 'hidden', position: 'sticky', top: 16 }}>
-      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Activity & Notes</div>
-        {toast && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, background: 'var(--green-light)', color: 'var(--green-text)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>
-            <CheckCircle size={12} />{toast}
-          </div>
-        )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {QUICK_ACTIONS.map(({ label, type, content }) => (
-            <button key={type} onClick={() => logActivity(type, content)} disabled={saving}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 100, fontSize: 11, fontWeight: 500, cursor: 'pointer', background: 'var(--surface-sunken)', color: 'var(--text-3)', border: '1px solid var(--border)', fontFamily: 'inherit', transition: 'all 0.15s' }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background='var(--green-light)'; el.style.color='var(--green-text)'; el.style.borderColor='var(--green)' }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background='var(--surface-sunken)'; el.style.color='var(--text-3)'; el.style.borderColor='var(--border)' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+      {/* Toast */}
+      {toast && <div className="toast toast-success">{toast}</div>}
 
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
-        <textarea value={note} onChange={e => setNote(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote() }}
-          className="input" rows={3} style={{ resize: 'none', fontSize: 13, lineHeight: 1.5 }}
-          placeholder="Write a note... (Cmd+Enter to save)" />
-        {error && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12, color: 'var(--red-text)', background: 'var(--red-light)', padding: '6px 10px', borderRadius: 6 }}>
-            <AlertCircle size={12} />{error}
-          </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={saveNote} disabled={saving || !note.trim()} className="btn btn-primary btn-sm">
-            {saving ? 'Saving...' : 'Save note'}
+      {/* Quick Actions */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {quickActions.map((qa) => (
+          <button
+            key={qa.type}
+            onClick={() => logActivity(qa.type)}
+            disabled={saving}
+            className="btn btn-sm"
+            style={{ fontSize: 11 }}
+          >
+            {qa.icon} {qa.label}
           </button>
-        </div>
+        ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {loading && <p style={{ padding: 16, fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>Loading...</p>}
-        {!loading && activities.length === 0 && (
-          <p style={{ padding: '24px 16px', fontSize: 13, color: 'var(--text-4)', textAlign: 'center' }}>No activity yet.</p>
+      {/* Note input */}
+      <div>
+        <textarea
+          ref={noteRef}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Add a note..."
+          rows={3}
+          style={{ resize: 'vertical', fontSize: 12 }}
+        />
+        <button
+          onClick={saveNote}
+          disabled={saving || !note.trim()}
+          className="btn btn-primary btn-sm"
+          style={{ marginTop: 6, width: '100%' }}
+        >
+          {saving ? 'Saving...' : 'Save Note'}
+        </button>
+      </div>
+
+      {/* Activity Feed */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {activities.length === 0 && (
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', padding: 20 }}>
+            No activity yet
+          </p>
         )}
-        {activities.map((a: any) => {
-          const Icon = activityIcon[a.type] ?? FileText
-          const avatarUrl = a.created_by ? profileAvatars[a.created_by] : null
-          return (
-            <div key={a.id} style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'flex-start' }}>
-              {/* User avatar */}
-              <UserAvatar name={a.created_by_name || '?'} avatarUrl={avatarUrl} size={26} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                  <Icon size={12} style={{ color: iconColor[a.type] ?? 'var(--text-4)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
-                </div>
-                <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{a.content}</p>
+        {activities.map((a) => (
+          <div key={a.id} style={{
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: 'var(--card-bg-hover)',
+            border: '1px solid var(--border-light)',
+            position: 'relative',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              {/* Avatar */}
+              <div className="avatar" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)', marginTop: 2 }}>
+                {avatars[a.created_by]
+                  ? <img src={avatars[a.created_by]} alt="" />
+                  : initials(a.created_by_name || 'U')
+                }
               </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {a.created_by_name || 'Unknown'}
+                  </span>
+                  <span className="badge badge-blue" style={{ fontSize: 10 }}>
+                    {typeLabel(a.type)}
+                  </span>
+                </div>
+                {a.content && (
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {a.content}
+                  </p>
+                )}
+                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  {new Date(a.created_at).toLocaleString()}
+                </p>
+              </div>
+              {/* Delete button */}
+              <button
+                onClick={() => setConfirmDelete(a.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 14, color: 'var(--text-tertiary)', padding: '0 4px',
+                  opacity: 0.5, transition: 'opacity 0.15s', flexShrink: 0,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
+                title="Delete"
+              >
+                ×
+              </button>
             </div>
-          )
-        })}
+
+            {/* Delete confirm */}
+            {confirmDelete === a.id && (
+              <div style={{
+                marginTop: 8, padding: '8px 10px', background: 'var(--danger-bg)',
+                borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{ fontSize: 11, color: 'var(--danger)', flex: 1 }}>Delete this entry?</span>
+                <button onClick={() => deleteActivity(a.id)} className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '3px 10px' }}>
+                  Yes
+                </button>
+                <button onClick={() => setConfirmDelete(null)} className="btn btn-sm" style={{ fontSize: 11, padding: '3px 10px' }}>
+                  No
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )

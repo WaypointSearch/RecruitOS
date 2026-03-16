@@ -1,287 +1,398 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { createSupabaseClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-import { formatDistanceToNow } from 'date-fns'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Plus, Pencil, Trash2, X, AlertTriangle, FileText } from 'lucide-react'
 
-function EditCompanyModal({ company, onSave }: { company: any; onSave: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({
-    name: company.name ?? '', status: company.status ?? 'Prospect',
-    website: company.website ?? '', industry: company.industry ?? '',
-    location: company.location ?? '', corporate_phone: company.corporate_phone ?? '',
-    local_phone: company.local_phone ?? '', notes: company.notes ?? '',
-  })
-  const supabase = createSupabaseClient()
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }))
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault(); setLoading(true)
-    await (supabase as any).from('companies').update({
-      name: form.name, status: form.status, website: form.website || null,
-      industry: form.industry || null, location: form.location || null,
-      corporate_phone: form.corporate_phone || null, local_phone: form.local_phone || null,
-      notes: form.notes || null,
-    }).eq('id', company.id)
-    setLoading(false); setOpen(false); onSave()
-  }
-
-  if (!open) return <button className="btn btn-sm gap-1" onClick={() => setOpen(true)}><Pencil size={12} />Edit</button>
-  return (
-    <>
-      <div className="modal-backdrop" onClick={() => setOpen(false)} />
-      <div className="modal-box">
-        <div className="modal-content">
-          <div className="modal-header">
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Edit Company</span>
-            <button onClick={() => setOpen(false)} className="btn btn-sm"><X size={16} /></button>
-          </div>
-          <form onSubmit={submit}>
-            <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ gridColumn: 'span 2' }}><label className="label">Company name *</label><input className="input" required value={form.name} onChange={set('name')} /></div>
-              <div><label className="label">Status</label><select className="input" value={form.status} onChange={set('status')}><option>Prospect</option><option>Client</option></select></div>
-              <div><label className="label">Industry</label><input className="input" value={form.industry} onChange={set('industry')} /></div>
-              <div style={{ gridColumn: 'span 2' }}><label className="label">Website</label><input className="input" value={form.website} onChange={set('website')} /></div>
-              <div style={{ gridColumn: 'span 2' }}><label className="label">Location</label><input className="input" value={form.location} onChange={set('location')} placeholder="Chicago, IL" /></div>
-              <div><label className="label">Corporate phone</label><input className="input" value={form.corporate_phone} onChange={set('corporate_phone')} /></div>
-              <div><label className="label">Local phone</label><input className="input" value={form.local_phone} onChange={set('local_phone')} /></div>
-              <div style={{ gridColumn: 'span 2' }}><label className="label">Notes</label><textarea className="input" rows={3} style={{ resize: 'none' }} value={form.notes} onChange={set('notes')} /></div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button>
-              <button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save changes'}</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </>
-  )
-}
-
-function DeleteCompanyButton({ companyId }: { companyId: string }) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+export default function CompanyDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
-  const supabase = createSupabaseClient()
-  async function doDelete() {
-    setLoading(true)
-    await (supabase as any).from('companies').delete().eq('id', companyId)
-    setLoading(false); router.push('/companies'); router.refresh()
-  }
-  return (
-    <>
-      <button className="btn btn-sm" onClick={() => setOpen(true)} style={{ color: 'var(--red-text)', background: 'var(--red-light)', borderColor: 'transparent' }}><Trash2 size={12} />Delete</button>
-      {open && (
-        <><div className="modal-backdrop" onClick={() => setOpen(false)} />
-        <div className="modal-box"><div className="modal-content" style={{ maxWidth: 400 }}>
-          <div className="modal-header"><div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-text)' }}><AlertTriangle size={16} /><span style={{ fontSize: 15, fontWeight: 600 }}>Delete company?</span></div><button onClick={() => setOpen(false)} className="btn btn-sm"><X size={14} /></button></div>
-          <div className="modal-body"><p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6 }}>This permanently deletes the company, all contacts, and job orders. <strong style={{ color: 'var(--red-text)' }}>Cannot be undone.</strong></p></div>
-          <div className="modal-footer"><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn-danger" onClick={doDelete} disabled={loading}><Trash2 size={13} />{loading ? 'Deleting...' : 'Yes, delete'}</button></div>
-        </div></div></>
-      )}
-    </>
-  )
-}
+  const sb = useRef(createClientComponentClient()).current
 
-function AddContactForm({ companyId, onAdded }: { companyId: string; onAdded: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ name: '', title: '', email: '', phone: '', notes: '' })
-  const supabase = createSupabaseClient()
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
-  async function submit(e: React.FormEvent) {
-    e.preventDefault(); setLoading(true)
-    await (supabase as any).from('company_contacts').insert([{ company_id: companyId, name: form.name, title: form.title || null, email: form.email || null, phone: form.phone || null, notes: form.notes || null }])
-    setLoading(false); setOpen(false); setForm({ name: '', title: '', email: '', phone: '', notes: '' }); onAdded()
-  }
-  if (!open) return <button className="btn btn-sm gap-1" onClick={() => setOpen(true)}><Plus size={12} />Add contact</button>
-  return (
-    <div style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginTop: 10 }}>
-      <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div><label className="label">Name *</label><input className="input" required value={form.name} onChange={set('name')} /></div>
-        <div><label className="label">Title</label><input className="input" value={form.title} onChange={set('title')} /></div>
-        <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={set('email')} /></div>
-        <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={set('phone')} /></div>
-        <div style={{ gridColumn: 'span 2' }}><label className="label">Notes about this contact</label><textarea className="input" rows={2} style={{ resize: 'none' }} value={form.notes} onChange={set('notes')} placeholder="Decision maker, prefers email, met at..." /></div>
-        <div style={{ gridColumn: 'span 2', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-sm" onClick={() => setOpen(false)}>Cancel</button>
-          <button type="submit" disabled={loading} className="btn btn-primary btn-sm">{loading ? 'Saving...' : 'Add contact'}</button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function CompanyActivityFeed({ companyId, profileId, profileName }: { companyId: string; profileId: string; profileName: string }) {
-  const [activities, setActivities] = useState<any[]>([])
-  const [note, setNote] = useState('')
-  const [saving, setSaving] = useState(false)
-  const supabase = createSupabaseClient()
-
-  const load = useCallback(async () => {
-    try {
-      const { data, error } = await (supabase as any).from('company_activities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(30)
-      if (!error) setActivities(data ?? [])
-    } catch (e) {
-      // company_activities table may not exist yet - run supabase-migration-v2.sql
-    }
-  }, [companyId])
-
-  useEffect(() => { load() }, [load])
-
-  async function save() {
-    if (!note.trim()) return
-    setSaving(true)
-    try {
-      await (supabase as any).from('company_activities').insert([{ company_id: companyId, type: 'note', content: note.trim(), created_by: profileId, created_by_name: profileName }])
-    } catch(e) {}
-    setNote(''); setSaving(false); load()
-  }
-
-  return (
-    <div className="mac-card" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>Company Activity</div>
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-        <textarea className="input" rows={2} style={{ resize: 'none', fontSize: 13 }} value={note}
-          onChange={e => setNote(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save() }}
-          placeholder="Log activity or note..." />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving || !note.trim()}>{saving ? 'Saving...' : 'Save note'}</button>
-        </div>
-      </div>
-      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-        {activities.length === 0 && <p style={{ padding: '16px 14px', fontSize: 13, color: 'var(--text-4)' }}>No activity yet.</p>}
-        {activities.map((a: any) => (
-          <div key={a.id} style={{ display: 'flex', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
-            <FileText size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{a.content}</p>
-              <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>
-                <span style={{ fontWeight: 600, color: 'var(--text-3)' }}>{a.created_by_name}</span>
-                {' · '}{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-export default function CompanyDetailPage({ params }: { params: { id: string } }) {
   const [company, setCompany] = useState<any>(null)
   const [contacts, setContacts] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
-  const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const supabase = createSupabaseClient()
+  const [activities, setActivities] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [editing, setEditing] = useState(false)
+  const [addingContact, setAddingContact] = useState(false)
+  const [confirmDeleteCompany, setConfirmDeleteCompany] = useState(false)
+  const [confirmDeleteContact, setConfirmDeleteContact] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
+  const [confirmDeleteActivity, setConfirmDeleteActivity] = useState<string | null>(null)
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   const load = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const [{ data: co }, { data: ct }, { data: js }, { data: pr }] = await Promise.all([
-      (supabase as any).from('companies').select('*').eq('id', params.id).single(),
-      (supabase as any).from('company_contacts').select('*').eq('company_id', params.id).order('name'),
-      (supabase as any).from('jobs').select('*').eq('company_id', params.id).order('created_at', { ascending: false }),
-      (supabase as any).from('profiles').select('*').eq('id', session!.user.id).single(),
-    ])
-    setCompany(co); setContacts(ct ?? []); setJobs(js ?? []); setProfile(pr); setLoading(false)
-  }, [params.id])
+    const { data: c } = await (sb as any).from('companies').select('*').eq('id', id).single()
+    setCompany(c)
+    const { data: ct } = await (sb as any).from('company_contacts').select('*').eq('company_id', id).order('created_at')
+    setContacts(ct ?? [])
+    const { data: j } = await (sb as any).from('jobs').select('*').eq('company_id', id).order('created_at', { ascending: false })
+    setJobs(j ?? [])
+    const { data: u } = await (sb as any).from('profiles').select('id, full_name, email, avatar_url')
+    setUsers(u ?? [])
+    try {
+      const { data: acts } = await (sb as any).from('company_activities').select('*').eq('company_id', id).order('created_at', { ascending: false }).limit(50)
+      setActivities(acts ?? [])
+    } catch { setActivities([]) }
+  }, [id, sb])
 
   useEffect(() => { load() }, [load])
 
-  if (loading) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 14 }}>Loading...</div>
-  )
-  if (!company) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)' }}>Company not found.</div>
-  )
+  const saveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const updates: any = {}
+    for (const [k, v] of fd.entries()) updates[k] = v || null
+    await (sb as any).from('companies').update(updates).eq('id', id)
+    showToast('Company updated')
+    setEditing(false)
+    load()
+  }
 
-  const initials = company.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const deleteCompany = async () => {
+    await (sb as any).from('companies').delete().eq('id', id)
+    router.push('/companies')
+  }
+
+  const addContact = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (contacts.length >= 5) { showToast('Maximum 5 contacts per company'); return }
+    const fd = new FormData(e.currentTarget)
+    const obj: any = { company_id: id }
+    for (const [k, v] of fd.entries()) obj[k] = v || null
+    await (sb as any).from('company_contacts').insert([obj])
+    showToast('Contact added')
+    setAddingContact(false)
+    load()
+  }
+
+  const deleteContact = async (cid: string) => {
+    await (sb as any).from('company_contacts').delete().eq('id', cid)
+    showToast('Contact deleted')
+    setConfirmDeleteContact(null)
+    load()
+  }
+
+  const saveNote = async () => {
+    if (!note.trim()) return
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) return
+    await (sb as any).from('company_activities').insert([{
+      company_id: id, type: 'note', content: note.trim(),
+      created_by: user.id, created_by_name: user.email?.split('@')[0],
+    }])
+    setNote('')
+    showToast('Note saved')
+    load()
+  }
+
+  const deleteActivity = async (aid: string) => {
+    await (sb as any).from('company_activities').delete().eq('id', aid)
+    showToast('Activity deleted')
+    setConfirmDeleteActivity(null)
+    load()
+  }
+
+  const updateAccountManager = async (userId: string) => {
+    await (sb as any).from('companies').update({ account_manager_id: userId || null }).eq('id', id)
+    showToast('Account manager updated')
+    load()
+  }
+
+  if (!company) return <div className="main-content"><p>Loading...</p></div>
+
+  const mgr = users.find((u: any) => u.id === company.account_manager_id)
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
-      <Link href="/companies" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-3)', textDecoration: 'none', marginBottom: 16 }}>
-        <ArrowLeft size={14} /> Back to companies
-      </Link>
+    <div style={{ maxWidth: '100%' }}>
+      {toast && <div className="toast toast-success">{toast}</div>}
 
-      <div className="mac-card" style={{ padding: 20, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--accent-light)', color: 'var(--accent-text)', fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials}</div>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 19, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>{company.name}</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
-              <span className={'badge ' + (company.status === 'Client' ? 'badge-green' : 'badge-amber')}>{company.status}</span>
-              {company.industry && <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{company.industry}</span>}
-              {company.location && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-3)' }}><MapPin size={12} />{company.location}</span>}
-              {company.website && <a href={company.website} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}><Globe size={12} />{company.website}</a>}
-              {company.corporate_phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-3)' }}><Phone size={12} />Corp: {company.corporate_phone}</span>}
-              {company.local_phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-3)' }}><Phone size={12} />Local: {company.local_phone}</span>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <EditCompanyModal company={company} onSave={load} />
-            <DeleteCompanyButton companyId={company.id} />
-          </div>
-        </div>
-        {company.notes && <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 12, padding: '10px 14px', background: 'var(--surface-sunken)', borderRadius: 8, lineHeight: 1.6 }}>{company.notes}</p>}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <Link href="/companies" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>← Companies</Link>
+        <h1 style={{ fontSize: 22, fontWeight: 700, flex: 1 }}>{company.name}</h1>
+        <span className={`badge ${company.status === 'Client' ? 'badge-green' : 'badge-yellow'}`}>
+          {company.status}
+        </span>
+        <button onClick={() => setEditing(!editing)} className="btn btn-sm">✏️ Edit</button>
+        <button onClick={() => setConfirmDeleteCompany(true)} className="btn btn-danger btn-sm">🗑 Delete</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="mac-card" style={{ padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div className="section-title" style={{ marginBottom: 0 }}>Contacts ({contacts.length}/5)</div>
-              {contacts.length < 5 && <AddContactForm companyId={company.id} onAdded={load} />}
+      {/* Delete company confirmation */}
+      {confirmDeleteCompany && (
+        <div className="modal-overlay">
+          <div className="confirm-dialog">
+            <h3>Delete Company?</h3>
+            <p>This will permanently delete "{company.name}" and all associated contacts, jobs, and pipeline data.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button onClick={deleteCompany} className="btn btn-danger">Yes, Delete</button>
+              <button onClick={() => setConfirmDeleteCompany(false)} className="btn">Cancel</button>
             </div>
-            {contacts.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-4)' }}>No contacts yet.</p>}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }} className="candidate-profile-grid">
+        {/* Left Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Edit Form */}
+          {editing && (
+            <div className="card" style={{ padding: 16 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Edit Company</h3>
+              <form onSubmit={saveCompany} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Name</label>
+                  <input name="name" defaultValue={company.name} required />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Status</label>
+                  <select name="status" defaultValue={company.status}>
+                    <option>Prospect</option><option>Client</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Website</label>
+                  <input name="website" defaultValue={company.website || ''} type="url" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Industry</label>
+                  <input name="industry" defaultValue={company.industry || ''} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Location</label>
+                  <input name="location" defaultValue={company.location || ''} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Corporate Phone</label>
+                  <input name="corporate_phone" defaultValue={company.corporate_phone || ''} type="tel" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Local Phone</label>
+                  <input name="local_phone" defaultValue={company.local_phone || ''} type="tel" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Company URL</label>
+                  <input name="company_url" defaultValue={company.company_url || ''} type="url" />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Notes</label>
+                  <textarea name="notes" defaultValue={company.notes || ''} rows={3} />
+                </div>
+                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+                  <button type="submit" className="btn btn-primary btn-sm">Save</button>
+                  <button type="button" onClick={() => setEditing(false)} className="btn btn-sm">Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Company Info Card */}
+          {!editing && (
+            <div className="card" style={{ padding: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[
+                  ['Industry', company.industry],
+                  ['Location', company.location],
+                  ['Website', company.website],
+                  ['Company URL', company.company_url],
+                  ['Corporate Phone', company.corporate_phone],
+                  ['Local Phone', company.local_phone],
+                ].map(([label, val]) => (
+                  <div key={label as string}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</p>
+                    <p style={{ fontSize: 13, color: val ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                      {(val as string) || '—'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {company.notes && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Notes</p>
+                  <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{company.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Account Manager */}
+          <div className="card" style={{ padding: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Account Manager</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <select
+                value={company.account_manager_id || ''}
+                onChange={(e) => updateAccountManager(e.target.value)}
+                style={{ maxWidth: 250 }}
+              >
+                <option value="">Unassigned</option>
+                {users.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.full_name || u.email}</option>
+                ))}
+              </select>
+              {mgr && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div className="avatar" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
+                    {mgr.avatar_url
+                      ? <img src={mgr.avatar_url} alt="" />
+                      : (mgr.full_name || mgr.email || '?').charAt(0).toUpperCase()
+                    }
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{mgr.full_name || mgr.email}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Contacts */}
+          <div className="card" style={{ padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600 }}>Contacts ({contacts.length}/5)</h3>
+              {contacts.length < 5 && (
+                <button onClick={() => setAddingContact(!addingContact)} className="btn btn-sm">+ Add</button>
+              )}
+            </div>
+
+            {addingContact && (
+              <form onSubmit={addContact} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12, padding: 12, background: 'var(--card-bg-hover)', borderRadius: 8 }}>
+                <input name="name" placeholder="Name *" required />
+                <input name="title" placeholder="Title" />
+                <input name="email" placeholder="Email" type="email" />
+                <input name="phone" placeholder="Phone" type="tel" />
+                <input name="linkedin" placeholder="LinkedIn URL" style={{ gridColumn: '1 / -1' }} />
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <textarea name="notes" placeholder="Notes about this contact..." rows={2} />
+                </div>
+                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+                  <button type="submit" className="btn btn-primary btn-sm">Save Contact</button>
+                  <button type="button" onClick={() => setAddingContact(false)} className="btn btn-sm">Cancel</button>
+                </div>
+              </form>
+            )}
+
+            {contacts.length === 0 && !addingContact && (
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No contacts yet</p>
+            )}
+
             {contacts.map((c: any) => (
-              <div key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--green-light)', color: 'var(--green-text)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {c.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+              <div key={c.id} style={{
+                padding: '10px 12px', borderRadius: 8, marginBottom: 8,
+                border: '1px solid var(--border-light)', background: 'var(--card-bg)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div className="avatar" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)' }}>
+                    {c.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{c.name}</div>
-                    {c.title && <div style={{ fontSize: 12, color: 'var(--text-4)' }}>{c.title}</div>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</p>
+                    {c.title && <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.title}</p>}
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+                      {c.email && <a href={`mailto:${c.email}`} style={{ fontSize: 11, color: 'var(--accent)' }}>{c.email}</a>}
+                      {c.phone && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{c.phone}</span>}
+                    </div>
+                    {c.notes && <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, fontStyle: 'italic' }}>{c.notes}</p>}
                   </div>
+                  <button
+                    onClick={() => setConfirmDeleteContact(c.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14 }}
+                    title="Delete contact"
+                  >
+                    ×
+                  </button>
                 </div>
-                <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
-                  {c.email && <a href={'mailto:' + c.email} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}><Mail size={11} />{c.email}</a>}
-                  {c.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-3)' }}><Phone size={11} />{c.phone}</span>}
-                </div>
-                {c.notes && <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6, padding: '6px 8px', background: 'var(--surface-sunken)', borderRadius: 6, lineHeight: 1.5 }}>{c.notes}</p>}
+                {confirmDeleteContact === c.id && (
+                  <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--danger-bg)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--danger)', flex: 1 }}>Remove {c.name}?</span>
+                    <button onClick={() => deleteContact(c.id)} className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}>Yes</button>
+                    <button onClick={() => setConfirmDeleteContact(null)} className="btn btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}>No</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
-          {profile && <CompanyActivityFeed companyId={company.id} profileId={profile.id} profileName={profile.full_name || profile.email} />}
+
+          {/* Job Orders */}
+          <div className="card" style={{ padding: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Active Job Orders</h3>
+            {jobs.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No job orders</p>}
+            {jobs.map((j: any) => (
+              <Link key={j.id} href={`/pipeline/${j.id}`} style={{ textDecoration: 'none' }}>
+                <div style={{
+                  padding: '10px 12px', borderRadius: 8, marginBottom: 6,
+                  border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 10,
+                  transition: 'background 0.15s',
+                }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--card-bg-hover)'}
+                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{j.title}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{j.location || 'No location'}</p>
+                  </div>
+                  <span className={`badge ${j.status === 'Active' ? 'badge-green' : 'badge-gray'}`}>{j.status}</span>
+                  {j.salary_min && j.salary_max && (
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      ${(j.salary_min / 1000).toFixed(0)}k–${(j.salary_max / 1000).toFixed(0)}k
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
 
-        <div className="mac-card" style={{ padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div className="section-title" style={{ marginBottom: 0 }}>Job orders ({jobs.length})</div>
-            <Link href="/jobs" className="btn btn-sm btn-primary"><Plus size={12} />Add job</Link>
+        {/* Right Column — Activity Feed */}
+        <div className="card" style={{ padding: 12, position: 'sticky', top: 16, maxHeight: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Activity Log</h3>
+
+          <div style={{ marginBottom: 10 }}>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add a company note..."
+              rows={2}
+              style={{ resize: 'vertical', fontSize: 12 }}
+            />
+            <button
+              onClick={saveNote}
+              disabled={!note.trim()}
+              className="btn btn-primary btn-sm"
+              style={{ marginTop: 4, width: '100%' }}
+            >
+              Save Note
+            </button>
           </div>
-          {jobs.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-4)' }}>No job orders yet.</p>}
-          {jobs.map((j: any) => (
-            <Link key={j.id} href={'/pipeline/' + j.id} style={{ display: 'block', textDecoration: 'none', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', marginBottom: 8, background: 'var(--surface-sunken)', transition: 'all 0.15s' }}
-              onMouseEnter={e => { (e.currentTarget as any).style.borderColor = 'var(--accent)'; (e.currentTarget as any).style.background = 'var(--accent-light)' }}
-              onMouseLeave={e => { (e.currentTarget as any).style.borderColor = 'var(--border)'; (e.currentTarget as any).style.background = 'var(--surface-sunken)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{j.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 2 }}>
-                    {j.location}{j.salary_min ? ' · $' + Math.round(j.salary_min/1000) + 'K–$' + Math.round(j.salary_max/1000) + 'K' : ''}
+
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {activities.length === 0 && (
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', padding: 16 }}>No activity yet</p>
+            )}
+            {activities.map((a: any) => (
+              <div key={a.id} style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--card-bg-hover)', position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600 }}>{a.created_by_name || 'Unknown'}</span>
+                    {a.content && <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{a.content}</p>}
+                    <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>{new Date(a.created_at).toLocaleString()}</p>
                   </div>
+                  <button
+                    onClick={() => setConfirmDeleteActivity(a.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14, opacity: 0.5 }}
+                    title="Delete"
+                  >×</button>
                 </div>
-                <span className={'badge ' + (j.status === 'Active' ? 'badge-green' : 'badge-gray')}>{j.status}</span>
+                {confirmDeleteActivity === a.id && (
+                  <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--danger)' }}>Delete?</span>
+                    <button onClick={() => deleteActivity(a.id)} className="btn btn-danger btn-sm" style={{ fontSize: 10, padding: '2px 8px' }}>Yes</button>
+                    <button onClick={() => setConfirmDeleteActivity(null)} className="btn btn-sm" style={{ fontSize: 10, padding: '2px 8px' }}>No</button>
+                  </div>
+                )}
               </div>
-            </Link>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
