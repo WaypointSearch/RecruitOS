@@ -60,7 +60,10 @@ export default function CandidatesPage() {
 
   async function bulkDelete() {
     setBulkDeleting(true)
-    await (supabase as any).from('candidates').delete().in('id', Array.from(selected))
+    const ids = Array.from(selected)
+    for (let i = 0; i < ids.length; i += 50) {
+      await (supabase as any).from('candidates').delete().in('id', ids.slice(i, i + 50))
+    }
     setBulkDeleting(false)
     setConfirmBulk(false)
     setSelected(new Set())
