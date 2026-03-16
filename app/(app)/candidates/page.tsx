@@ -30,8 +30,8 @@ export default function CandidatesPage() {
 
   async function loadMeta() {
     const { data } = await (supabase as any).from('candidates').select('tags, location')
-    const tags = [...new Set((data ?? []).flatMap((c: any) => c.tags ?? []))].sort() as string[]
-    const locs = [...new Set((data ?? []).map((c: any) => c.location).filter(Boolean))].sort() as string[]
+    const tags = Array.from(new Set((data ?? []).flatMap((c: any) => c.tags ?? [])).sort() as string[]
+    const locs = Array.from(new Set((data ?? []).map((c: any) => c.location).filter(Boolean)).sort() as string[]
     setAllTags(tags)
     setAllLocations(locs)
   }
