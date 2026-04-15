@@ -90,15 +90,15 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     const commit = () => {if(val!==String(c?.[field]??''))saveField(field,val);setEditing(false)}
     if(editing) return(
       <div style={{marginBottom:6}}>
-        <label style={{fontSize:9,fontWeight:700,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:2}}>{label}</label>
+        <label style={{fontSize:10,fontWeight:700,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:2}}>{label}</label>
         <input type={type} value={val} onChange={e=>setVal(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&commit()} autoFocus style={{padding:'4px 8px',fontSize:12}} />
       </div>
     )
     const dv = field==='current_salary'&&c?.[field]?`$${c[field].toLocaleString()}`:(c?.[field]||'')
     return(
       <div style={{marginBottom:6,cursor:'pointer'}} onClick={()=>setEditing(true)} title="Click to edit">
-        <label style={{fontSize:9,fontWeight:700,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:1}}>{label}</label>
-        <p style={{fontSize:12,padding:'2px 0',color:dv?'var(--text-primary)':'var(--text-tertiary)',borderBottom:'1px dashed transparent',transition:'border-color 0.15s'}}
+        <label style={{fontSize:10,fontWeight:700,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:1}}>{label}</label>
+        <p style={{fontSize:14,padding:'3px 0',color:dv?'var(--text-primary)':'var(--text-tertiary)',borderBottom:'1px dashed transparent',transition:'border-color 0.15s'}}
           onMouseEnter={e=>e.currentTarget.style.borderColor='var(--accent)'} onMouseLeave={e=>e.currentTarget.style.borderColor='transparent'}>
           {dv||'— click to add —'}
         </p>
@@ -106,18 +106,18 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     )
   }
 
-  if(!c) return <div style={{position:'fixed',top:0,right:0,bottom:0,width:420,background:'var(--card-bg)',borderLeft:'1px solid var(--border)',zIndex:500,padding:24}}><p style={{color:'var(--text-tertiary)'}}>Loading...</p></div>
+  if(!c) return <div style={{position:'fixed',top:0,right:0,bottom:0,width:420,background:'var(--panel-bg)',borderLeft:'1px solid var(--border)',zIndex:500,padding:24}}><p style={{color:'var(--text-tertiary)'}}>Loading...</p></div>
 
   const commission = c.current_salary ? Math.round(c.current_salary * 0.2) : null
 
   return(
     <>
       <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.2)',zIndex:400}} />
-      <div style={{position:'fixed',top:0,right:0,bottom:0,width:460,maxWidth:'92vw',background:'var(--card-bg)',borderLeft:'1px solid var(--border)',zIndex:500,display:'flex',flexDirection:'column',boxShadow:'-8px 0 24px rgba(0,0,0,0.12)',animation:'slideInRight 0.2s ease'}}>
+      <div style={{position:'fixed',top:0,right:0,bottom:0,width:460,maxWidth:'92vw',background:'var(--panel-bg)',borderLeft:'1px solid var(--border)',zIndex:500,display:'flex',flexDirection:'column',boxShadow:'-8px 0 24px rgba(0,0,0,0.12)',animation:'slideInRight 0.2s ease'}}>
         {toast&&<div className="toast toast-success" style={{position:'absolute',top:10,right:10,left:'auto',bottom:'auto',zIndex:10}}>{toast}</div>}
 
         {/* Header with nav */}
-        <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',position:'sticky',top:0,background:'var(--card-bg)',zIndex:5}}>
+        <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',position:'sticky',top:0,background:'var(--panel-bg)',zIndex:5}}>
           {/* Nav bar */}
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
             <button onClick={onPrev} disabled={!hasPrev} className="btn btn-sm" style={{padding:'3px 10px',fontSize:12,opacity:hasPrev?1:0.3}}>← Prev</button>
@@ -128,8 +128,8 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           {/* Name + meta */}
           <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
             <div style={{flex:1,minWidth:0}}>
-              <h2 style={{fontSize:16,fontWeight:700}}>{c.name}</h2>
-              {c.current_title&&<p style={{fontSize:12,color:'var(--text-secondary)'}}>{c.current_title}{c.current_company?` @ ${c.current_company}`:''}</p>}
+              <h2 style={{fontSize:18,fontWeight:700}}>{c.name}</h2>
+              {c.current_title&&<p style={{fontSize:14,color:'var(--text-secondary)'}}>{c.current_title}{c.current_company?` @ ${c.current_company}`:''}</p>}
               <div style={{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}}>
                 {c.state&&<span style={{display:'inline-flex',padding:'2px 8px',borderRadius:100,fontSize:9,fontWeight:700,color:'white',background:'var(--accent)'}}>{c.state}</span>}
                 {(c.disciplines??[]).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'2px 6px',borderRadius:100,fontSize:9,fontWeight:600,color:'white',background:'var(--success)'}}>{d}</span>)}
@@ -169,14 +169,14 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
         <div style={{flex:1,overflowY:'auto',padding:'12px 16px'}}>
           {commission&&(
             <div className="commission-banner">
-              <span style={{fontSize:13,fontWeight:800,color:'var(--neon-green)'}}>💰 ${commission.toLocaleString()}</span>
+              <span style={{fontSize:15,fontWeight:800,color:'var(--neon-green)'}}>💰 ${commission.toLocaleString()}</span>
               <span style={{fontSize:10,color:'var(--text-secondary)'}}>${c.current_salary.toLocaleString()} × 20%</span>
             </div>
           )}
 
           {/* Contact — phone first, stacked on left */}
           <div style={{marginBottom:14}}>
-            <h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Contact</h3>
+            <h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Contact</h3>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 14px'}}>
               <Field label="Work Phone" field="work_phone" type="tel" />
               <Field label="Cell Phone" field="cell_phone" type="tel" />
@@ -188,7 +188,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
 
           {/* Professional */}
           <div style={{marginBottom:14}}>
-            <h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Professional</h3>
+            <h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Professional</h3>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 14px'}}>
               <Field label="Title" field="current_title" />
               <Field label="Company" field="current_company" />
@@ -204,7 +204,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           {/* Pipeline — linked to job orders */}
           {pipeline.length>0&&(
             <div style={{marginBottom:14}}>
-              <h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Matched Job Orders</h3>
+              <h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Matched Job Orders</h3>
               {pipeline.map((p:any)=>(
                 <Link key={p.id} href={`/pipeline/${p.job_id || p.jobs?.id}`} style={{textDecoration:'none',display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:6,marginBottom:4,background:'var(--card-bg-hover)',transition:'background 0.1s'}}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--accent-bg)'} onMouseLeave={e=>e.currentTarget.style.background='var(--card-bg-hover)'}>
@@ -224,7 +224,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
 
                     {/* Resume upload */}
           <div style={{marginBottom:14}}>
-            <h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Documents</h3>
+            <h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Documents</h3>
             {c.resume_url ? (
               <div style={{padding:'8px 12px',background:'var(--accent-bg)',borderRadius:8,display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontSize:16}}>📄</span>
@@ -249,7 +249,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
             }} />
           </div>
 
-          <div><h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
+          <div><h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
         </div>
       </div>
       <style jsx global>{`@keyframes slideInRight{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>

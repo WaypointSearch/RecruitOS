@@ -243,21 +243,21 @@ export default function CandidatesPage() {
                     <td onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selected.has(c.id)} onChange={()=>toggleSelect(c.id)} style={{width:14,height:14,cursor:'pointer'}} /></td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
                       <div style={{display:'flex',alignItems:'center',gap:8}}>
-                        <div className="avatar" style={{background:colorFor(c.name),color:'white',width:24,height:24,fontSize:9}}>{initials(c.name)}</div>
-                        <span style={{fontWeight:600,fontSize:13,color:'var(--accent)'}}>{c.name}</span>
+                        <div className="avatar" style={{background:colorFor(c.name),color:'white',width:30,height:30,fontSize:11}}>{initials(c.name)}</div>
+                        <span style={{fontWeight:600,fontSize:14,color:'var(--accent)'}}>{c.name}</span>
                       </div>
                     </td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer',fontSize:12}}>{c.current_title||'—'}</td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer',fontSize:12}}>{c.current_company||'—'}</td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {c.state?<span style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',borderRadius:100,fontSize:10,fontWeight:700,color:'white',background:getStateColor(c.state),letterSpacing:'0.03em'}}>{c.state}</span>:'—'}
+                      {c.state?<span style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',borderRadius:100,fontSize:11,fontWeight:700,color:'white',background:getStateColor(c.state),letterSpacing:'0.03em',padding:'3px 10px'}}>{c.state}</span>:'—'}
                     </td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {(c.disciplines??[]).slice(0,2).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'2px 6px',borderRadius:100,fontSize:9,fontWeight:600,color:'white',background:DISC_COLORS[d]||'var(--accent)',marginRight:3}}>{d}</span>)}
+                      {(c.disciplines??[]).slice(0,2).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'2px 6px',borderRadius:100,fontSize:10,fontWeight:700,color:'white',background:DISC_COLORS[d]||'var(--accent)',marginRight:4,padding:'3px 8px'}}>{d}</span>)}
                     </td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {c.work_phone?<a href={`tel:${c.work_phone}`} onClick={e=>e.stopPropagation()} style={{fontSize:11,color:'var(--accent)',textDecoration:'none'}} title={c.work_phone}>📞 Call</a>
-                      :c.cell_phone?<a href={`tel:${c.cell_phone}`} onClick={e=>e.stopPropagation()} style={{fontSize:11,color:'var(--accent)',textDecoration:'none'}} title={c.cell_phone}>📱 Cell</a>
+                      {c.work_phone?<a href={`tel:${c.work_phone}`} onClick={e=>e.stopPropagation()} style={{fontSize:13,color:'var(--neon-blue)',textDecoration:'none',fontWeight:500}} title={c.work_phone}>📞 Call</a>
+                      :c.cell_phone?<a href={`tel:${c.cell_phone}`} onClick={e=>e.stopPropagation()} style={{fontSize:13,color:'var(--neon-blue)',textDecoration:'none',fontWeight:500}} title={c.cell_phone}>📱 Cell</a>
                       :<span style={{fontSize:11,color:'var(--text-tertiary)'}}>—</span>}
                     </td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}><span style={{fontSize:11,color:lastContacted[c.id]?'var(--text-secondary)':'var(--text-tertiary)'}}>{fmtContact(c.id)}</span></td>
