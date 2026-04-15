@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import ActivityFeed from './[id]/ActivityFeed'
@@ -22,30 +22,38 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [selectedJob, setSelectedJob] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarFocused, setAvatarFocused] = useState(false)
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
-  const handleAvatarPaste = async (e: React.ClipboardEvent | ClipboardEvent) => {
-    const items = (e as any).clipboardData?.items
+  const handleAvatarPaste = useCallback(async (e: ClipboardEvent) => {
+    if (!avatarFocused) return
+    const items = e.clipboardData?.items
     if (!items) return
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
         e.preventDefault()
         setUploadingAvatar(true)
-        const blob = item.getAsFile()
+        const blob = items[i].getAsFile()
         if (!blob) { setUploadingAvatar(false); return }
         const ext = blob.type.split('/')[1] || 'png'
         const path = candidateId + '/avatar-' + Date.now() + '.' + ext
         const { error } = await sb.storage.from('avatars').upload(path, blob, { upsert: true })
-        if (error) { showToast('Upload failed'); setUploadingAvatar(false); return }
+        if (error) { showToast('Upload failed: ' + error.message); setUploadingAvatar(false); return }
         const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(path)
         await (sb as any).from('candidates').update({ avatar_url: publicUrl }).eq('id', candidateId)
         setC((prev: any) => ({ ...prev, avatar_url: publicUrl }))
         showToast('Avatar saved!')
         setUploadingAvatar(false)
         if (onUpdated) onUpdated()
+        return
       }
     }
-  }
+  }, [avatarFocused, candidateId, sb, onUpdated])
+
+  useEffect(() => {
+    document.addEventListener('paste', handleAvatarPaste)
+    return () => document.removeEventListener('paste', handleAvatarPaste)
+  }, [handleAvatarPaste])
 
   const load = async () => {
     const {data} = await (sb as any).from('candidates').select('*').eq('id', candidateId).single()
@@ -152,22 +160,23 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           {/* Avatar + Name — centered card */}
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',paddingBottom:4}}>
             <div
-              onPaste={handleAvatarPaste}
               tabIndex={0}
-              title={c.avatar_url ? 'Click and paste (Ctrl+V) to change photo' : 'Click here and paste (Ctrl+V) a photo from clipboard'}
-              style={{width:64,height:64,borderRadius:'50%',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:700,overflow:'hidden',cursor:'pointer',border:'2px solid var(--accent)',background:c.avatar_url?'transparent':'var(--accent)',color:'white',transition:'all 0.2s',outline:'none',position:'relative'}}
-              onFocus={e => e.currentTarget.style.boxShadow='0 0 0 3px var(--accent-bg)'}
-              onBlur={e => e.currentTarget.style.boxShadow='none'}
+              onClick={e => e.currentTarget.focus()}
+              onFocus={() => setAvatarFocused(true)}
+              onBlur={() => setAvatarFocused(false)}
+              title={c.avatar_url ? 'Click here, then Ctrl+V to change photo' : 'Click here, then Ctrl+V to paste a photo'}
+              style={{width:64,height:64,borderRadius:'50%',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:700,overflow:'hidden',cursor:'pointer',border:avatarFocused?'2px solid var(--neon-green)':'2px solid var(--accent)',background:c.avatar_url?'transparent':'var(--accent)',color:'white',transition:'all 0.25s',outline:'none',boxShadow:avatarFocused?'0 0 16px var(--neon-green)':'none'}}
             >
               {uploadingAvatar ? <span style={{fontSize:14}}>⏳</span>
               : c.avatar_url ? <img src={c.avatar_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
               : c.name?.split(' ').map((w:string)=>w[0]).join('').toUpperCase().slice(0,2)}
             </div>
+            {avatarFocused && <p style={{fontSize:10,color:'var(--neon-green)',marginBottom:4,fontWeight:600}}>Ready — paste image (Ctrl+V)</p>}
             <h2 style={{fontSize:18,fontWeight:700}}>{c.name}</h2>
             {c.current_title&&<p style={{fontSize:14,color:'var(--text-secondary)',marginTop:2}}>{c.current_title}{c.current_company?` @ ${c.current_company}`:''}</p>}
             <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap',justifyContent:'center'}}>
-              {c.state&&<span style={{display:'inline-flex',padding:'3px 10px',borderRadius:100,fontSize:10,fontWeight:700,color:'var(--accent)',background:'var(--accent-bg)',border:'1px solid var(--accent)'}}>{c.state}</span>}
-              {(c.disciplines??[]).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'3px 8px',borderRadius:100,fontSize:9,fontWeight:600,color:'var(--neon-green)',background:'var(--success-bg)',border:'1px solid var(--neon-green)'}}>{d}</span>)}
+              {c.state&&<span className="panel-pill-glow" style={{display:'inline-flex',padding:'3px 10px',borderRadius:100,fontSize:10,fontWeight:700,color:'var(--accent)',background:'var(--accent-bg)',border:'1px solid var(--accent)'}}>{c.state}</span>}
+              {(c.disciplines??[]).map((d:string)=><span key={d} className="panel-pill-glow" style={{display:'inline-flex',padding:'3px 8px',borderRadius:100,fontSize:9,fontWeight:600,color:'var(--neon-green)',background:'var(--success-bg)',border:'1px solid var(--neon-green)',animationDelay:Math.random()*2+'s'}}>{d}</span>)}
             </div>
           </div>
           <div style={{display:'flex',gap:4,justifyContent:'center',marginTop:6}}>
@@ -253,10 +262,9 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
             </div>
           )}
 
-          {c.resume_url&&<div style={{marginBottom:14,padding:'8px 12px',background:'var(--accent-bg)',borderRadius:8}}><a href={c.resume_url} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',textDecoration:'none',fontWeight:600}}>📄 {c.resume_name||'View Resume'}</a></div>}
-          {c.tags?.length>0&&<div style={{marginBottom:14}}><h3 style={{fontSize:11,fontWeight:700,marginBottom:6,color:'var(--accent)',textTransform:'uppercase'}}>Tags</h3><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{c.tags.map((t:string)=><span key={t} className="badge badge-gray" style={{fontSize:10}}>{t}</span>)}</div></div>}
+          {c.tags?.length>0&&<div style={{marginBottom:14}}><h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Tags</h3><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{c.tags.map((t:string)=><span key={t} className="badge badge-gray" style={{fontSize:11}}>{t}</span>)}</div></div>}
 
-                    {/* Resume upload */}
+                    {/* Documents */}
           <div style={{marginBottom:14}}>
             <h3 style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Documents</h3>
             {c.resume_url ? (

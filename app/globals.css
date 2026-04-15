@@ -158,6 +158,19 @@ html[data-theme="dark"] .neon-pill { box-shadow: 0 0 8px currentColor; }
 /* Transparent pill glow in dark mode */
 html[data-theme="dark"] td span[style*="border:"] { text-shadow: 0 0 6px currentColor; }
 
+/* Side panel alive glow — pills pulse subtly when panel is open */
+@keyframes pillGlow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+.panel-pill-glow {
+  animation: pillGlow 3s ease-in-out infinite;
+}
+html[data-theme="dark"] .panel-pill-glow {
+  animation: pillGlow 3s ease-in-out infinite;
+  text-shadow: 0 0 8px currentColor;
+}
+
 /* BUTTONS */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
