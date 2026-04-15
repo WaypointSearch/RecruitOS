@@ -23,6 +23,8 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [selectedJob, setSelectedJob] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [findingPhone, setFindingPhone] = useState(false)
+  const [phoneResult, setPhoneResult] = useState<any>(null)
   const [avatarFocused, setAvatarFocused] = useState(false)
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -96,6 +98,36 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     if (ex && ex.length > 0) { showToast('Already in this hotlist'); setShowHotlistAdd(false); return }
     await (sb as any).from('hotlist_candidates').insert([{hotlist_id:selectedHotlist,candidate_id:candidateId,added_by:user?.id}])
     showToast('Added to hotlist! 🔥'); setShowHotlistAdd(false); setSelectedHotlist('')
+  }
+
+  const findWorkPhone = async () => {
+    if (!c.current_company) { showToast('Need company name first'); return }
+    const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
+    if (!city) { showToast('Need city/location first'); return }
+    setFindingPhone(true); setPhoneResult(null)
+    try {
+      const res = await fetch('/api/find-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: c.current_company,
+          city,
+          state: c.state || '',
+          candidateId: candidateId,
+          candidateName: c.name,
+        }),
+      })
+      const data = await res.json()
+      setPhoneResult(data)
+      if (data.phone) {
+        setC((prev: any) => ({ ...prev, work_phone: data.phone }))
+        showToast(data.verified ? '📞 Phone found & verified!' : '📞 Phone found (unverified)')
+        if (onUpdated) onUpdated()
+      } else {
+        showToast(data.error || 'No phone found')
+      }
+    } catch (err) { showToast('Lookup failed — check API keys') }
+    setFindingPhone(false)
   }
 
   const matchToJob = async () => {
@@ -238,6 +270,18 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
               <Field label="Personal Email" field="personal_email" type="email" />
             </div>
             {c.linkedin&&<div style={{marginTop:2}}><label style={{fontSize:9,fontWeight:700,color:'var(--accent)',textTransform:'uppercase'}}>LinkedIn</label><a href={c.linkedin} target="_blank" rel="noreferrer" style={{fontSize:11,color:'var(--accent)',display:'block',wordBreak:'break-all'}}>{c.linkedin.length>55?c.linkedin.slice(0,53)+'…':c.linkedin}</a></div>}
+            {/* Find Work Phone */}
+            {!c.work_phone && (
+              <button onClick={findWorkPhone} disabled={findingPhone} className="btn btn-sm" style={{marginTop:8,width:'100%',justifyContent:'center',background:findingPhone?'var(--accent-bg)':'transparent',color:'var(--neon-blue)',borderColor:'var(--neon-blue)',fontSize:12}}>
+                {findingPhone ? '🔍 Searching...' : '📞 Find Work Phone'}
+              </button>
+            )}
+            {phoneResult && !phoneResult.phone && (
+              <p style={{fontSize:11,color:'var(--text-tertiary)',marginTop:4,textAlign:'center'}}>{phoneResult.error}</p>
+            )}
+            {phoneResult && phoneResult.phone && !phoneResult.verified && (
+              <p style={{fontSize:10,color:'var(--warning)',marginTop:4,textAlign:'center'}}>⚠ Found but unverified: {phoneResult.reason}</p>
+            )}
           </div>
 
           {/* Professional */}
