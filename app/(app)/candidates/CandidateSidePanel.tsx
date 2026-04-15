@@ -168,9 +168,10 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
         {/* Body */}
         <div style={{flex:1,overflowY:'auto',padding:'12px 16px'}}>
           {commission&&(
-            <div style={{padding:'8px 12px',borderRadius:8,marginBottom:12,background:'linear-gradient(135deg,var(--success-bg),var(--accent-bg))',display:'flex',justifyContent:'space-between'}}>
-              <span style={{fontSize:12,fontWeight:700,color:'var(--success)'}}>💰 ${commission.toLocaleString()} fee</span>
-              <span style={{fontSize:10,color:'var(--text-tertiary)'}}>${c.current_salary.toLocaleString()} × 20%</span>
+            <div className="commission-banner">
+                <span style={{fontSize:13,fontWeight:800,color:'var(--neon-green)'}}>💰 ${commission.toLocaleString()}</span>
+                <span style={{fontSize:10,color:'var(--text-secondary)'}}>${c.current_salary.toLocaleString()} × 20%</span>
+              </div>
             </div>
           )}
 
