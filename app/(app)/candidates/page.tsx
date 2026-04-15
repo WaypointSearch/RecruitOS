@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AddCandidateModal from './AddCandidateModal'
 import CandidateSidePanel from './CandidateSidePanel'
-import { getMetroNames, getDisciplineNames, geocodeLocation } from '@/lib/geo-intelligence'
+import { getMetroNames, getDisciplineNames, getMetroCenter } from '@/lib/geo-intelligence'
 
 export default function CandidatesPage() {
   const sb = useRef(createClientComponentClient()).current
@@ -17,7 +17,7 @@ export default function CandidatesPage() {
   const [metroFilter, setMetroFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [disciplineFilter, setDisciplineFilter] = useState('')
-  const [radiusMiles, setRadiusMiles] = useState(0) // 0 = metro text match, >0 = PostGIS radius
+  const [radiusMiles, setRadiusMiles] = useState(0)
   const [sortBy, setSortBy] = useState('name')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
@@ -28,10 +28,16 @@ export default function CandidatesPage() {
   const [toast, setToast] = useState<string | null>(null)
   const [lastContacted, setLastContacted] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
-  const [hotlists, setHotlists] = useState<any[]>([])
+  // Saved searches
+  const [savedSearches, setSavedSearches] = useState<any[]>([])
   const [showSaveSearch, setShowSaveSearch] = useState(false)
-  const [hotlistName, setHotlistName] = useState('')
-  const [showHotlists, setShowHotlists] = useState(false)
+  const [searchName, setSearchName] = useState('')
+  const [showSaved, setShowSaved] = useState(false)
+  // Hotlists for bulk add
+  const [hotlists, setHotlists] = useState<any[]>([])
+  const [showHotlistAdd, setShowHotlistAdd] = useState(false)
+  const [selectedHotlist, setSelectedHotlist] = useState('')
+  // Radius search results
   const [radiusResults, setRadiusResults] = useState<any[] | null>(null)
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
@@ -40,78 +46,58 @@ export default function CandidatesPage() {
     setLoading(true)
     const { count } = await (sb as any).from('candidates').select('id', { count: 'exact', head: true })
     setTotalCount(count || 0)
-
-    let all: any[] = []
-    let from = 0
+    let all: any[] = []; let from = 0
     while (true) {
       const { data } = await (sb as any).from('candidates').select('*').order('name').range(from, from + 999)
-      if (!data || !data.length) break
-      all = all.concat(data)
-      if (data.length < 1000) break
-      from += 1000
+      if (!data || !data.length) break; all = all.concat(data); if (data.length < 1000) break; from += 1000
     }
     setCandidates(all)
+    setAllTags(Array.from(new Set(all.flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[])
 
-    const tags = Array.from(new Set(all.flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[]
-    setAllTags(tags)
-
-    // Last contacted (batch)
-    const ids = all.slice(0, 500).map((c: any) => c.id)
-    const map: Record<string, string> = {}
+    // Last contacted
+    const ids = all.slice(0, 500).map((c: any) => c.id); const map: Record<string, string> = {}
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100)
-      const { data: acts } = await (sb as any).from('activities').select('candidate_id, created_at')
-        .in('candidate_id', chunk).order('created_at', { ascending: false }).limit(500)
+      const { data: acts } = await (sb as any).from('activities').select('candidate_id, created_at').in('candidate_id', chunk).order('created_at', { ascending: false }).limit(500)
       if (acts) acts.forEach((a: any) => { if (!map[a.candidate_id]) map[a.candidate_id] = a.created_at })
     }
     setLastContacted(map)
 
-    const { data: hl } = await (sb as any).from('hotlists').select('*').order('created_at', { ascending: false })
+    const { data: ss } = await (sb as any).from('saved_searches').select('*').order('created_at', { ascending: false })
+    setSavedSearches(ss ?? [])
+    const { data: hl } = await (sb as any).from('hotlists').select('*').order('name')
     setHotlists(hl ?? [])
     setLoading(false)
   }, [sb])
 
   useEffect(() => { load() }, [load])
 
-  // Radius search via PostGIS RPC
+  // Radius search via PostGIS
   const doRadiusSearch = useCallback(async () => {
     if (!metroFilter || radiusMiles <= 0) { setRadiusResults(null); return }
-    const geo = geocodeLocation(metroFilter.toLowerCase())
-    if (!geo) { setRadiusResults(null); return }
-
+    const center = getMetroCenter(metroFilter)
+    if (!center) { setRadiusResults(null); return }
     try {
-      const { data } = await (sb as any).rpc('search_candidates_by_radius', {
-        lat: geo.lat, lng: geo.lng, radius_miles: radiusMiles
-      })
+      const { data, error } = await (sb as any).rpc('search_candidates_by_radius', { lat: center.lat, lng: center.lng, radius_miles: radiusMiles })
+      if (error) { console.error('Radius search error:', error); setRadiusResults(null); return }
       setRadiusResults(data ?? [])
-    } catch {
-      // PostGIS not available, fall back to text match
-      setRadiusResults(null)
-    }
+    } catch { setRadiusResults(null) }
   }, [metroFilter, radiusMiles, sb])
 
   useEffect(() => { doRadiusSearch() }, [doRadiusSearch])
 
-  // Use radius results if available, otherwise filter from all candidates
   const baseList = radiusResults !== null ? radiusResults : candidates
-
   const filtered = baseList.filter((c: any) => {
-    const keywords = search.toLowerCase().trim().split(/\s+/).filter(Boolean)
-    if (keywords.length > 0) {
-      const searchable = [
-        c.name, c.current_title, c.current_company, c.location, c.metro_area,
-        c.email, c.work_email, c.personal_email, c.previous_title,
-        c.previous_company, c.linkedin, ...(c.tags ?? []), ...(c.disciplines ?? [])
-      ].filter(Boolean).join(' ').toLowerCase()
-      if (!keywords.every((kw: string) => searchable.includes(kw))) return false
+    const kws = search.toLowerCase().trim().split(/\s+/).filter(Boolean)
+    if (kws.length > 0) {
+      const s = [c.name, c.current_title, c.current_company, c.location, c.metro_area,
+        c.email, c.work_email, c.previous_title, c.previous_company, c.linkedin,
+        ...(c.tags ?? []), ...(c.disciplines ?? [])].filter(Boolean).join(' ').toLowerCase()
+      if (!kws.every((kw: string) => s.includes(kw))) return false
     }
-
-    // Metro text match (when not using radius)
     if (metroFilter && radiusResults === null) {
-      const metroMatch = c.metro_area === metroFilter || (c.location || '').toLowerCase().includes(metroFilter.toLowerCase())
-      if (!metroMatch) return false
+      if (!(c.metro_area === metroFilter || (c.location || '').toLowerCase().includes(metroFilter.toLowerCase()))) return false
     }
-
     if (disciplineFilter && !(c.disciplines ?? []).includes(disciplineFilter)) return false
     if (tagFilter && !(c.tags ?? []).includes(tagFilter)) return false
     return true
@@ -126,46 +112,52 @@ export default function CandidatesPage() {
 
   const totalPages = Math.ceil(sorted.length / pageSize)
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize)
-
   const toggleSelect = (id: string) => { setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   const toggleAll = () => { setSelected(selected.size === paginated.length ? new Set() : new Set(paginated.map((c: any) => c.id))) }
+
   const bulkDelete = async () => {
     const ids = Array.from(selected)
     for (let i = 0; i < ids.length; i += 50) await (sb as any).from('candidates').delete().in('id', ids.slice(i, i + 50))
     showToast(`Deleted ${ids.length}`); setSelected(new Set()); setConfirmBulkDelete(false); load()
   }
 
-  const saveHotlist = async () => {
-    if (!hotlistName.trim()) return
+  const bulkAddToHotlist = async () => {
+    if (!selectedHotlist || selected.size === 0) return
     const { data: { user } } = await sb.auth.getUser()
-    await (sb as any).from('hotlists').insert([{
-      name: hotlistName.trim(), search_query: search, metro_filter: metroFilter,
-      tag_filter: tagFilter, discipline_filter: disciplineFilter,
-      radius_miles: radiusMiles || null, created_by: user?.id,
+    const rows = Array.from(selected).map(cid => ({ hotlist_id: selectedHotlist, candidate_id: cid, added_by: user?.id }))
+    for (let i = 0; i < rows.length; i += 50) {
+      await (sb as any).from('hotlist_candidates').upsert(rows.slice(i, i + 50), { onConflict: 'hotlist_id,candidate_id' })
+    }
+    showToast(`Added ${selected.size} to hotlist`); setShowHotlistAdd(false); setSelected(new Set())
+  }
+
+  const saveSearch = async () => {
+    if (!searchName.trim()) return
+    const { data: { user } } = await sb.auth.getUser()
+    await (sb as any).from('saved_searches').insert([{
+      name: searchName.trim(), search_query: search, metro_filter: metroFilter,
+      discipline_filter: disciplineFilter, tag_filter: tagFilter, radius_miles: radiusMiles || null, created_by: user?.id,
     }])
-    showToast('Hotlist saved!'); setHotlistName(''); setShowSaveSearch(false); load()
+    showToast('Search saved!'); setSearchName(''); setShowSaveSearch(false); load()
   }
-  const loadHotlist = (h: any) => {
-    setSearch(h.search_query || ''); setMetroFilter(h.metro_filter || '')
-    setTagFilter(h.tag_filter || ''); setDisciplineFilter(h.discipline_filter || '')
-    setRadiusMiles(h.radius_miles || 0); setPage(1); setShowHotlists(false)
-    showToast(`Loaded: ${h.name}`)
+  const loadSearch = (s: any) => {
+    setSearch(s.search_query || ''); setMetroFilter(s.metro_filter || '')
+    setDisciplineFilter(s.discipline_filter || ''); setTagFilter(s.tag_filter || '')
+    setRadiusMiles(s.radius_miles || 0); setPage(1); setShowSaved(false); showToast(`Loaded: ${s.name}`)
   }
-  const deleteHotlist = async (id: string) => {
-    await (sb as any).from('hotlists').delete().eq('id', id); showToast('Deleted'); load()
+  const deleteSearch = async (id: string) => {
+    await (sb as any).from('saved_searches').delete().eq('id', id); load()
   }
 
   const initials = (n: string) => n?.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || '?'
   const colors = ['#007aff', '#30d158', '#ff9f0a', '#ff3b30', '#af52de', '#5856d6', '#ff2d55', '#00c7be']
-  const colorFor = (n: string) => colors[Math.abs((n||'').charCodeAt(0) + (n||'').length) % colors.length]
+  const colorFor = (n: string) => colors[Math.abs((n||'').charCodeAt(0)+(n||'').length)%colors.length]
   const fmtContact = (id: string) => {
     const d = lastContacted[id]; if (!d) return '—'
-    const days = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
-    if (days === 0) return 'Today'; if (days === 1) return 'Yday'
-    if (days < 7) return `${days}d`; if (days < 30) return `${Math.floor(days/7)}w`
+    const days = Math.floor((Date.now()-new Date(d).getTime())/86400000)
+    if (days===0) return 'Today'; if (days===1) return 'Yday'; if (days<7) return `${days}d`; if (days<30) return `${Math.floor(days/7)}w`
     return `${Math.floor(days/30)}mo`
   }
-
   const hasFilters = search || metroFilter || tagFilter || disciplineFilter
 
   return (
@@ -180,47 +172,49 @@ export default function CandidatesPage() {
           Candidates <span style={{ fontSize: 15, fontWeight: 400, color: 'var(--text-tertiary)' }}>({totalCount})</span>
         </h1>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button onClick={() => setShowHotlists(!showHotlists)} className="btn btn-sm">🔖 Hotlists{hotlists.length > 0 ? ` (${hotlists.length})` : ''}</button>
+          <button onClick={() => setShowSaved(!showSaved)} className="btn btn-sm">💾 Searches{savedSearches.length > 0 ? ` (${savedSearches.length})` : ''}</button>
+          <Link href="/hotlists" className="btn btn-sm" style={{ textDecoration: 'none' }}>🔥 Hotlists</Link>
           <Link href="/import" className="btn btn-sm" style={{ textDecoration: 'none' }}>⬆ Import</Link>
           <button onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">+ Add</button>
         </div>
       </div>
 
-      {/* Hotlists */}
-      {showHotlists && hotlists.length > 0 && (
+      {/* Saved searches panel */}
+      {showSaved && savedSearches.length > 0 && (
         <div className="card" style={{ padding: 10, marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <h3 style={{ fontSize: 12, fontWeight: 600 }}>🔖 Saved Hotlists</h3>
-            <button onClick={() => setShowHotlists(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}>×</button>
+            <h3 style={{ fontSize: 12, fontWeight: 600 }}>💾 Saved Searches</h3>
+            <button onClick={() => setShowSaved(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}>×</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {hotlists.map((h: any) => (
-              <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <button onClick={() => loadHotlist(h)} className="btn btn-sm" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)', borderColor: 'var(--accent)', fontSize: 11 }}>
-                  {h.name} {h.radius_miles ? `(${h.radius_miles}mi)` : ''}
+            {savedSearches.map((s: any) => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <button onClick={() => loadSearch(s)} className="btn btn-sm" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)', borderColor: 'var(--accent)', fontSize: 11 }}>
+                  {s.name} {s.radius_miles ? `(${s.radius_miles}mi)` : ''}
                 </button>
-                <button onClick={() => deleteHotlist(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14 }}>×</button>
+                <button onClick={() => deleteSearch(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14 }}>×</button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Search & Filters */}
+      {/* Filters */}
       <div className="card" style={{ padding: '10px 14px', marginBottom: 10, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input type="search" placeholder="Keywords: mechanical engineer, atlanta, HVAC..." value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }} style={{ flex: 1, minWidth: 180 }} />
-        <select value={metroFilter} onChange={e => { setMetroFilter(e.target.value); setPage(1) }} style={{ maxWidth: 140 }}>
-          <option value="">All metros</option>
+        <input type="search" placeholder="Keywords: mechanical, engineer, HVAC..." value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1) }} style={{ flex: 1, minWidth: 160 }} />
+        <select value={metroFilter} onChange={e => { setMetroFilter(e.target.value); setRadiusMiles(0); setRadiusResults(null); setPage(1) }} style={{ maxWidth: 140 }}>
+          <option value="">All locations</option>
           {getMetroNames().map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         {metroFilter && (
-          <select value={radiusMiles} onChange={e => { setRadiusMiles(parseInt(e.target.value)); setPage(1) }} style={{ maxWidth: 110 }}>
-            <option value="0">Metro area</option>
-            <option value="10">10 miles</option>
-            <option value="25">25 miles</option>
-            <option value="50">50 miles</option>
-            <option value="100">100 miles</option>
+          <select value={radiusMiles} onChange={e => { setRadiusMiles(parseInt(e.target.value)); setPage(1) }} style={{ maxWidth: 120 }}>
+            <option value="0">Metro text</option>
+            <option value="10">10 mi radius</option>
+            <option value="25">25 mi radius</option>
+            <option value="50">50 mi radius</option>
+            <option value="100">100 mi radius</option>
+            <option value="150">150 mi radius</option>
           </select>
         )}
         <select value={disciplineFilter} onChange={e => { setDisciplineFilter(e.target.value); setPage(1) }} style={{ maxWidth: 130 }}>
@@ -231,21 +225,22 @@ export default function CandidatesPage() {
           <option value="">All tags</option>
           {allTags.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }} style={{ maxWidth: 140 }}>
-          <option value="name">Sort: Name</option>
+        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }} style={{ maxWidth: 130 }}>
+          <option value="name">Name</option>
           <option value="last_contacted">Last Contact</option>
-          <option value="created_at">Date Added</option>
-          <option value="has_resume">Has Resume</option>
+          <option value="created_at">Newest</option>
+          <option value="has_resume">Resume</option>
         </select>
-        {hasFilters && (
-          showSaveSearch ? (
-            <div style={{ display: 'flex', gap: 4 }}>
-              <input type="text" placeholder="Hotlist name..." value={hotlistName} onChange={e => setHotlistName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && saveHotlist()} style={{ width: 140, padding: '4px 8px', fontSize: 11 }} autoFocus />
-              <button onClick={saveHotlist} className="btn btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: 10 }}>Save</button>
-              <button onClick={() => setShowSaveSearch(false)} className="btn btn-sm" style={{ padding: '3px 6px', fontSize: 10 }}>×</button>
-            </div>
-          ) : <button onClick={() => setShowSaveSearch(true)} className="btn btn-sm" style={{ fontSize: 10 }}>💾</button>
+        {hasFilters && !showSaveSearch && (
+          <button onClick={() => setShowSaveSearch(true)} className="btn btn-sm" style={{ fontSize: 10 }}>💾</button>
+        )}
+        {showSaveSearch && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input type="text" value={searchName} onChange={e => setSearchName(e.target.value)} placeholder="Name this search..."
+              onKeyDown={e => e.key === 'Enter' && saveSearch()} style={{ width: 130, padding: '4px 8px', fontSize: 11 }} autoFocus />
+            <button onClick={saveSearch} className="btn btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: 10 }}>Save</button>
+            <button onClick={() => setShowSaveSearch(false)} className="btn btn-sm" style={{ padding: '3px 6px', fontSize: 10 }}>×</button>
+          </div>
         )}
       </div>
 
@@ -256,20 +251,44 @@ export default function CandidatesPage() {
           {metroFilter && <span className="badge badge-green" style={{ fontSize: 10 }}>📍 {metroFilter}{radiusMiles > 0 ? ` +${radiusMiles}mi` : ''}</span>}
           {disciplineFilter && <span className="badge badge-yellow" style={{ fontSize: 10 }}>🔧 {disciplineFilter}</span>}
           {tagFilter && <span className="badge badge-gray" style={{ fontSize: 10 }}>🏷 {tagFilter}</span>}
-          <button onClick={() => { setSearch(''); setMetroFilter(''); setTagFilter(''); setDisciplineFilter(''); setRadiusMiles(0); setPage(1) }}
+          {radiusResults !== null && <span style={{ fontSize: 10, color: 'var(--success)' }}>🛰 PostGIS radius active</span>}
+          <button onClick={() => { setSearch(''); setMetroFilter(''); setTagFilter(''); setDisciplineFilter(''); setRadiusMiles(0); setRadiusResults(null); setPage(1) }}
             style={{ fontSize: 10, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 'auto' }}>{sorted.length} results</span>
         </div>
       )}
 
-      {/* Bulk */}
+      {/* Bulk actions */}
       {selected.size > 0 && (
-        <div className="card" style={{ padding: '8px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--accent-bg)' }}>
+        <div className="card" style={{ padding: '8px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-bg)', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-text)' }}>{selected.size} selected</span>
           <button onClick={() => setConfirmBulkDelete(true)} className="btn btn-danger btn-sm" style={{ fontSize: 11 }}>Delete</button>
+          <button onClick={() => setShowHotlistAdd(true)} className="btn btn-sm" style={{ fontSize: 11, background: 'var(--warning-bg)', borderColor: 'var(--warning)', color: 'var(--warning)' }}>🔥 Add to Hotlist</button>
           <button onClick={() => setSelected(new Set())} className="btn btn-sm" style={{ fontSize: 11 }}>Clear</button>
         </div>
       )}
+
+      {/* Hotlist add modal */}
+      {showHotlistAdd && (
+        <div className="modal-overlay"><div className="confirm-dialog" style={{ textAlign: 'left' }}>
+          <h3>Add {selected.size} candidates to hotlist</h3>
+          {hotlists.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '12px 0' }}>No hotlists yet. <Link href="/hotlists" style={{ color: 'var(--accent)' }}>Create one first →</Link></p>
+          ) : (
+            <div style={{ margin: '12px 0' }}>
+              <select value={selectedHotlist} onChange={e => setSelectedHotlist(e.target.value)} style={{ marginBottom: 12 }}>
+                <option value="">Select a hotlist...</option>
+                {hotlists.map((h: any) => <option key={h.id} value={h.id}>🔥 {h.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button onClick={bulkAddToHotlist} disabled={!selectedHotlist} className="btn btn-primary btn-sm">Add to Hotlist</button>
+            <button onClick={() => setShowHotlistAdd(false)} className="btn btn-sm">Cancel</button>
+          </div>
+        </div></div>
+      )}
+
       {confirmBulkDelete && (
         <div className="modal-overlay"><div className="confirm-dialog">
           <h3>Delete {selected.size} Candidates?</h3><p>This cannot be undone.</p>
@@ -306,10 +325,10 @@ export default function CandidatesPage() {
                     <td onClick={() => setSidePanelId(c.id)} style={{ cursor: 'pointer', fontSize: 12 }}>{c.current_title || '—'}</td>
                     <td className="hide-mobile" onClick={() => setSidePanelId(c.id)} style={{ cursor: 'pointer', fontSize: 12 }}>{c.current_company || '—'}</td>
                     <td className="hide-mobile" onClick={() => setSidePanelId(c.id)} style={{ cursor: 'pointer', fontSize: 12 }}>
-                      {c.metro_area ? <span className="badge badge-green" style={{ fontSize: 9 }}>{c.metro_area}</span> : (c.location ? `📍 ${c.location.split(',')[0]}` : '—')}
+                      {c.metro_area ? <span className="badge badge-green" style={{ fontSize: 9 }}>{c.metro_area}</span> : (c.location ? c.location.split(',')[0] : '—')}
                     </td>
                     <td className="hide-mobile" onClick={() => setSidePanelId(c.id)} style={{ cursor: 'pointer' }}>
-                      {(c.disciplines ?? []).slice(0, 2).map((d: string) => <span key={d} className="badge badge-blue" style={{ fontSize: 9, marginRight: 2 }}>{d}</span>)}
+                      {(c.disciplines ?? []).slice(0,2).map((d: string) => <span key={d} className="badge badge-blue" style={{ fontSize: 9, marginRight: 2 }}>{d}</span>)}
                     </td>
                     <td onClick={() => setSidePanelId(c.id)} style={{ cursor: 'pointer' }}>
                       <span style={{ fontSize: 11, color: lastContacted[c.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>{fmtContact(c.id)}</span>
@@ -324,7 +343,6 @@ export default function CandidatesPage() {
         {!loading && paginated.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>{hasFilters ? 'No candidates match' : 'No candidates yet'}</div>}
       </div>
 
-      {/* Pagination */}
       {sorted.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, flexWrap: 'wrap', gap: 6 }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{((page-1)*pageSize)+1}–{Math.min(page*pageSize, sorted.length)} of {sorted.length}</span>
