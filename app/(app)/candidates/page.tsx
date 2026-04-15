@@ -250,10 +250,10 @@ export default function CandidatesPage() {
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer',fontSize:12}}>{c.current_title||'—'}</td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer',fontSize:12}}>{c.current_company||'—'}</td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {c.state?<span style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',borderRadius:100,fontSize:11,fontWeight:700,color:'white',background:getStateColor(c.state),letterSpacing:'0.03em',padding:'3px 10px'}}>{c.state}</span>:'—'}
+                      {c.state?<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:700,color:'white',background:getStateColor(c.state),letterSpacing:'0.03em'}}>{c.state}</span>:'—'}
                     </td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {(c.disciplines??[]).slice(0,2).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'2px 6px',borderRadius:100,fontSize:10,fontWeight:700,color:'white',background:DISC_COLORS[d]||'var(--accent)',marginRight:4,padding:'3px 8px'}}>{d}</span>)}
+                      {(c.disciplines??[]).slice(0,2).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'3px 8px',borderRadius:100,fontSize:10,fontWeight:700,color:'white',background:DISC_COLORS[d]||'var(--accent)',marginRight:4}}>{d}</span>)}
                     </td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
                       {c.work_phone?<a href={`tel:${c.work_phone}`} onClick={e=>e.stopPropagation()} style={{fontSize:13,color:'var(--neon-blue)',textDecoration:'none',fontWeight:500}} title={c.work_phone}>📞 Call</a>
