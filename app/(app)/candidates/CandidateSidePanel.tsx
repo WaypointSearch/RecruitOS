@@ -14,7 +14,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated }: 
   const [showHotlistAdd, setShowHotlistAdd] = useState(false)
   const [selectedHotlist, setSelectedHotlist] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2000) }
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
   const load = async () => {
     const { data } = await (sb as any).from('candidates').select('*').eq('id', candidateId).single()
@@ -39,12 +39,21 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated }: 
   const addToHotlist = async () => {
     if (!selectedHotlist) return
     const { data: { user } } = await sb.auth.getUser()
-    const { error } = await (sb as any).from('hotlist_candidates').upsert([{
+    // Check if already exists
+    const { data: existing } = await (sb as any).from('hotlist_candidates')
+      .select('id').eq('hotlist_id', selectedHotlist).eq('candidate_id', candidateId).limit(1)
+    if (existing && existing.length > 0) {
+      showToast('Already in this hotlist')
+      setShowHotlistAdd(false)
+      return
+    }
+    const { error } = await (sb as any).from('hotlist_candidates').insert([{
       hotlist_id: selectedHotlist, candidate_id: candidateId, added_by: user?.id
-    }], { onConflict: 'hotlist_id,candidate_id' })
-    if (error) showToast('Already in that hotlist')
+    }])
+    if (error) showToast('Error: ' + error.message)
     else showToast('Added to hotlist! 🔥')
     setShowHotlistAdd(false)
+    setSelectedHotlist('')
   }
 
   const Field = ({ label, field, type = 'text' }: { label: string; field: string; type?: string }) => {
@@ -85,7 +94,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated }: 
             <h2 style={{ fontSize: 16, fontWeight: 700 }}>{c.name}</h2>
             {c.current_title && <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.current_title}{c.current_company ? ` @ ${c.current_company}` : ''}</p>}
             <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-              {c.metro_area && <span className="badge badge-green" style={{ fontSize: 9 }}>📍 {c.metro_area}</span>}
+              {c.state && <span className="badge badge-gray" style={{ fontSize: 9 }}>🏛 {c.state}</span>}
               {(c.disciplines ?? []).map((d: string) => <span key={d} className="badge badge-blue" style={{ fontSize: 9 }}>{d}</span>)}
             </div>
           </div>
@@ -96,12 +105,18 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated }: 
 
         {showHotlistAdd && (
           <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--border)', background: 'var(--warning-bg)', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--warning)' }}>🔥</span>
-            <select value={selectedHotlist} onChange={e => setSelectedHotlist(e.target.value)} style={{ flex: 1, fontSize: 12 }}>
-              <option value="">Select hotlist...</option>
-              {hotlists.map((h: any) => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-            <button onClick={addToHotlist} disabled={!selectedHotlist} className="btn btn-primary btn-sm" style={{ fontSize: 11 }}>Add</button>
+            <span style={{ fontSize: 14 }}>🔥</span>
+            {hotlists.length === 0 ? (
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No hotlists. <Link href="/hotlists" style={{ color: 'var(--accent)' }}>Create one →</Link></span>
+            ) : (
+              <>
+                <select value={selectedHotlist} onChange={e => setSelectedHotlist(e.target.value)} style={{ flex: 1, fontSize: 12 }}>
+                  <option value="">Select hotlist...</option>
+                  {hotlists.map((h: any) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                </select>
+                <button onClick={addToHotlist} disabled={!selectedHotlist} className="btn btn-primary btn-sm" style={{ fontSize: 11 }}>Add</button>
+              </>
+            )}
           </div>
         )}
 
@@ -130,7 +145,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated }: 
               <Field label="Current Title" field="current_title" />
               <Field label="Current Company" field="current_company" />
               <Field label="Location" field="location" />
-              <Field label="Metro Area" field="metro_area" />
+              <Field label="State" field="state" />
               <Field label="Salary" field="current_salary" type="number" />
               <Field label="Time in Role" field="time_in_current_role" />
               <Field label="Previous Title" field="previous_title" />
@@ -140,11 +155,11 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated }: 
 
           {c.resume_url && <div style={{ marginBottom: 14, padding: '8px 12px', background: 'var(--accent-bg)', borderRadius: 8 }}><a href={c.resume_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>📄 {c.resume_name || 'View Resume'}</a></div>}
 
-          {c.tags?.length > 0 && <div style={{ marginBottom: 14 }}><h3 style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tags</h3><div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{c.tags.map((t: string) => <span key={t} className="badge badge-gray" style={{ fontSize: 10 }}>{t}</span>)}</div></div>}
+          {c.tags?.length > 0 && <div style={{ marginBottom: 14 }}><h3 style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--accent)', textTransform: 'uppercase' }}>Tags</h3><div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{c.tags.map((t: string) => <span key={t} className="badge badge-gray" style={{ fontSize: 10 }}>{t}</span>)}</div></div>}
 
-          {pipeline.length > 0 && <div style={{ marginBottom: 14 }}><h3 style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pipeline</h3>{pipeline.map((p: any) => <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}><span className="badge badge-blue" style={{ fontSize: 10 }}>{p.stage}</span><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.jobs?.title}</span></div>)}</div>}
+          {pipeline.length > 0 && <div style={{ marginBottom: 14 }}><h3 style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--accent)', textTransform: 'uppercase' }}>Pipeline</h3>{pipeline.map((p: any) => <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}><span className="badge badge-blue" style={{ fontSize: 10 }}>{p.stage}</span><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.jobs?.title}</span></div>)}</div>}
 
-          <div><h3 style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
+          <div><h3 style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--accent)', textTransform: 'uppercase' }}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
         </div>
       </div>
       <style jsx global>{`@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
