@@ -171,6 +171,21 @@ html[data-theme="dark"] .panel-pill-glow {
   text-shadow: 0 0 8px currentColor;
 }
 
+/* Empty field subtle glow — draws attention to missing data */
+@keyframes emptyFieldPulse {
+  0%, 100% { border-bottom-color: var(--text-tertiary); opacity: 0.5; }
+  50% { border-bottom-color: var(--accent); opacity: 0.8; }
+}
+.empty-field-glow {
+  animation: emptyFieldPulse 4s ease-in-out infinite;
+}
+
+/* Scrolling ticker */
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
 /* BUTTONS */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;

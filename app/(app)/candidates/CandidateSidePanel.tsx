@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
+import { getAllStateAbbrs, US_STATES } from '@/lib/geo-intelligence'
 import ActivityFeed from './[id]/ActivityFeed'
 
 interface Props {
@@ -120,18 +121,28 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     const [val,setVal] = useState('')
     useEffect(() => {setVal(c?.[field]??'')}, [c?.[field]])
     const commit = () => {if(val!==String(c?.[field]??''))saveField(field,val);setEditing(false)}
+    const isEmpty = !c?.[field]
+    const isSalary = field === 'current_salary'
+    const isState = field === 'state'
     if(editing) return(
       <div style={{marginBottom:6}}>
         <label style={{fontSize:10,fontWeight:700,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:2}}>{label}</label>
-        <input type={type} value={val} onChange={e=>setVal(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&commit()} autoFocus style={{padding:'4px 8px',fontSize:12}} />
+        {isState ? (
+          <select value={val} onChange={e=>{setVal(e.target.value);saveField(field,e.target.value);setEditing(false)}} autoFocus onBlur={()=>setEditing(false)} style={{padding:'4px 8px',fontSize:13}}>
+            <option value="">Select state...</option>
+            {getAllStateAbbrs().map(s=><option key={s} value={s}>{s} — {US_STATES[s]}</option>)}
+          </select>
+        ) : (
+          <input type={type} value={val} onChange={e=>setVal(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&commit()} autoFocus style={{padding:'4px 8px',fontSize:13}} />
+        )}
       </div>
     )
-    const dv = field==='current_salary'&&c?.[field]?`$${c[field].toLocaleString()}`:(c?.[field]||'')
+    const dv = isSalary&&c?.[field]?`$${c[field].toLocaleString()}`:(c?.[field]||'')
     return(
       <div style={{marginBottom:6,cursor:'pointer'}} onClick={()=>setEditing(true)} title="Click to edit">
-        <label style={{fontSize:10,fontWeight:700,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:1}}>{label}</label>
-        <p style={{fontSize:14,padding:'3px 0',color:dv?'var(--text-primary)':'var(--text-tertiary)',borderBottom:'1px dashed transparent',transition:'border-color 0.15s'}}
-          onMouseEnter={e=>e.currentTarget.style.borderColor='var(--accent)'} onMouseLeave={e=>e.currentTarget.style.borderColor='transparent'}>
+        <label style={{fontSize:10,fontWeight:700,color:isSalary&&dv?'var(--neon-green)':'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.04em',display:'block',marginBottom:1}}>{label}</label>
+        <p className={isEmpty?'empty-field-glow':''} style={{fontSize:14,padding:'3px 0',color:isSalary&&dv?'var(--neon-green)':dv?'var(--text-primary)':'var(--text-tertiary)',fontWeight:isSalary&&dv?700:400,borderBottom:isEmpty?'1px dashed var(--text-tertiary)':'1px dashed transparent',transition:'all 0.2s'}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor='var(--accent)'} onMouseLeave={e=>{if(!isEmpty)e.currentTarget.style.borderColor='transparent'}}>
           {dv||'— click to add —'}
         </p>
       </div>

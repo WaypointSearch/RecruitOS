@@ -120,6 +120,7 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
   const [btc, setBtc] = useState<{price:number;change:number;high:number;low:number}|null>(null)
+  const [ticker, setTicker] = useState<string[]>([])
 
   // Widget cards — static + live RSS merged
   const [allCards, setAllCards] = useState(() => shuffleByDay(STATIC_CARDS))
@@ -164,6 +165,37 @@ export default function Sidebar() {
     }
     fetchBtc()
     const t = setInterval(fetchBtc, 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Ticker — headlines from Reuters + CNBC + ESPN
+  useEffect(() => {
+    const fetchTicker = async () => {
+      const headlines: string[] = []
+      const feeds = [
+        'https://feeds.reuters.com/reuters/topNews',
+        'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114',
+        'https://www.espn.com/espn/rss/news',
+      ]
+      for (const url of feeds) {
+        try {
+          const r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url) + '&count=5')
+          const d = await r.json()
+          if (d.items) d.items.slice(0, 4).forEach((item: any) => { if (item.title) headlines.push(item.title) })
+        } catch {}
+      }
+      // Add stock/crypto headlines
+      try {
+        const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true')
+        const d = await r.json()
+        if (d.bitcoin) headlines.push('BTC $' + d.bitcoin.usd?.toLocaleString() + ' (' + (d.bitcoin.usd_24h_change >= 0 ? '+' : '') + d.bitcoin.usd_24h_change?.toFixed(1) + '%)')
+        if (d.ethereum) headlines.push('ETH $' + d.ethereum.usd?.toLocaleString() + ' (' + (d.ethereum.usd_24h_change >= 0 ? '+' : '') + d.ethereum.usd_24h_change?.toFixed(1) + '%)')
+        if (d.solana) headlines.push('SOL $' + d.solana.usd?.toLocaleString() + ' (' + (d.solana.usd_24h_change >= 0 ? '+' : '') + d.solana.usd_24h_change?.toFixed(1) + '%)')
+      } catch {}
+      if (headlines.length > 0) setTicker(headlines)
+    }
+    fetchTicker()
+    const t = setInterval(fetchTicker, 10 * 60 * 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -267,6 +299,24 @@ export default function Sidebar() {
                   <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: catColors[card.cat] || 'var(--accent)' }}>{card.cat}</span>
                 </div>
                 <p style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{card.text}</p>
+              </div>
+            )}
+            {/* Scrolling Ticker */}
+            {ticker.length > 0 && (
+              <div className="sidebar-widget" style={{ padding: '6px 0', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', marginBottom: 4 }}>
+                  <span style={{ fontSize: 10 }}>📰</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--neon-orange)' }}>LIVE FEED</span>
+                </div>
+                <div style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'inline-block', animation: `tickerScroll ${ticker.length * 8}s linear infinite`, paddingLeft: '100%' }}>
+                    {ticker.map((h, i) => (
+                      <span key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', marginRight: 40, display: 'inline' }}>
+                        <span style={{ color: 'var(--neon-blue)', marginRight: 6 }}>●</span>{h}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
