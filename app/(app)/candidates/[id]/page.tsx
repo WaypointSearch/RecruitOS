@@ -56,7 +56,7 @@ export default function CandidateDetailPage() {
   return (
     <div style={{ maxWidth: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <Link href="/candidates" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>← Candidates</Link>
+        <button onClick={() => router.back()} style={{ fontSize: 13, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Back</button>
         <h1 style={{ fontSize: 20, fontWeight: 700, flex: 1 }}>{candidate.name}</h1>
         {candidate.disciplines?.length > 0 && (
           <div style={{ display: 'flex', gap: 4 }}>

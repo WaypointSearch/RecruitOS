@@ -22,9 +22,9 @@ const getStateColor = (s: string) => STATE_COLORS[s] || 'var(--accent)'
 
 // Discipline colors
 const DISC_COLORS: Record<string,string> = {
-  'Mechanical':'#0ea5e9','Electrical':'#f59e0b','Plumbing':'#22c55e',
-  'Fire Protection':'#ef4444','Management':'#8b5cf6','Engineering':'#06b6d4',
-  'Estimating':'#ec4899','Sales':'#f97316','Construction':'#84cc16',
+  'Mechanical':'#00e676','Electrical':'#00b0ff','Plumbing':'#00e676',
+  'Fire Protection':'#ff6d00','Management':'#b388ff','Engineering':'#00bcd4',
+  'Estimating':'#e040fb','Sales':'#ff9100','Construction':'#76ff03',
 }
 
 export default function CandidatesPage() {

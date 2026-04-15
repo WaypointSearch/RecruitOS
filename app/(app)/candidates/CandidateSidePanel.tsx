@@ -222,6 +222,33 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           {c.resume_url&&<div style={{marginBottom:14,padding:'8px 12px',background:'var(--accent-bg)',borderRadius:8}}><a href={c.resume_url} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',textDecoration:'none',fontWeight:600}}>📄 {c.resume_name||'View Resume'}</a></div>}
           {c.tags?.length>0&&<div style={{marginBottom:14}}><h3 style={{fontSize:11,fontWeight:700,marginBottom:6,color:'var(--accent)',textTransform:'uppercase'}}>Tags</h3><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{c.tags.map((t:string)=><span key={t} className="badge badge-gray" style={{fontSize:10}}>{t}</span>)}</div></div>}
 
+                    {/* Resume upload */}
+          <div style={{marginBottom:14}}>
+            <h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Documents</h3>
+            {c.resume_url ? (
+              <div style={{padding:'8px 12px',background:'var(--accent-bg)',borderRadius:8,display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:16}}>📄</span>
+                <a href={c.resume_url} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',textDecoration:'none',fontWeight:600,flex:1}}>{c.resume_name||'View Resume'}</a>
+                <button onClick={async()=>{await(sb as any).from('candidates').update({resume_url:null,resume_name:null}).eq('id',candidateId);load();showToast('Removed')}} className="btn btn-sm" style={{fontSize:10,color:'var(--danger)',padding:'2px 6px'}}>×</button>
+              </div>
+            ) : (
+              <div onClick={()=>document.getElementById('sidepanel-resume-input')?.click()} style={{border:'1px dashed var(--border)',borderRadius:8,padding:'12px',textAlign:'center',cursor:'pointer',transition:'all 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='var(--accent-bg)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='transparent'}}>
+                <p style={{fontSize:11,fontWeight:600}}>📎 Upload Resume</p>
+                <p style={{fontSize:10,color:'var(--text-tertiary)'}}>PDF or Word, max 10MB</p>
+              </div>
+            )}
+            <input id="sidepanel-resume-input" type="file" accept=".pdf,.doc,.docx" style={{display:'none'}} onChange={async(e)=>{
+              const file=e.target.files?.[0];if(!file)return
+              const ext=file.name.split('.').pop()
+              const path=candidateId+'/'+Date.now()+'.'+ext
+              const{error:ue}=await sb.storage.from('resumes').upload(path,file)
+              if(ue){showToast('Upload failed');return}
+              const{data:{publicUrl}}=sb.storage.from('resumes').getPublicUrl(path)
+              await(sb as any).from('candidates').update({resume_url:publicUrl,resume_name:file.name}).eq('id',candidateId)
+              load();showToast('Resume uploaded! 📄')
+            }} />
+          </div>
+
           <div><h3 style={{fontSize:11,fontWeight:700,marginBottom:8,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
         </div>
       </div>
