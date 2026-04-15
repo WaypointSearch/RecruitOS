@@ -8,23 +8,23 @@ import { getAllStateAbbrs, US_STATES, getCitiesForState, getDisciplineNames } fr
 
 // State color palette — vivid, unique per state region
 const STATE_COLORS: Record<string,string> = {
-  'NY':'#ff2d55','NJ':'#ff6b8a','CT':'#d63384','MA':'#8b5cf6','PA':'#6366f1',
-  'GA':'#f97316','FL':'#fb923c','NC':'#ef4444','SC':'#dc2626','VA':'#ec4899',
-  'TX':'#eab308','CO':'#22c55e','CA':'#0ea5e9','WA':'#06b6d4','OR':'#14b8a6',
-  'IL':'#8b5cf6','OH':'#a855f7','MI':'#d946ef','IN':'#c084fc','WI':'#a78bfa',
-  'MD':'#f472b6','DC':'#e11d48','TN':'#f59e0b','AL':'#d97706',
-  'AZ':'#84cc16','NV':'#65a30d','UT':'#16a34a','NM':'#15803d',
-  'MN':'#0891b2','MO':'#0284c7','KS':'#0369a1','IA':'#075985',
-  'LA':'#7c3aed','MS':'#6d28d9','AR':'#5b21b6','OK':'#4c1d95',
-  'KY':'#b45309','WV':'#92400e',
+  'NY':'#b388ff','NJ':'#9c7cff','CT':'#7c6cff','MA':'#8b5cf6','PA':'#7c4dff',
+  'GA':'#ffab40','FL':'#ffd740','NC':'#00e5ff','SC':'#00bcd4','VA':'#ea80fc',
+  'TX':'#ffd740','CO':'#69f0ae','CA':'#40c4ff','WA':'#18ffff','OR':'#64ffda',
+  'IL':'#b388ff','OH':'#ea80fc','MI':'#ce93d8','IN':'#b39ddb','WI':'#9fa8da',
+  'MD':'#f48fb1','DC':'#ea80fc','TN':'#ffcc80','AL':'#ffab40',
+  'AZ':'#b2ff59','NV':'#69f0ae','UT':'#00e676','NM':'#00c853',
+  'MN':'#80deea','MO':'#4fc3f7','KS':'#29b6f6','IA':'#03a9f4',
+  'LA':'#b388ff','MS':'#9575cd','AR':'#7e57c2','OK':'#673ab7',
+  'KY':'#ffcc80','WV':'#ffab40',
 }
 const getStateColor = (s: string) => STATE_COLORS[s] || 'var(--accent)'
 
 // Discipline colors
 const DISC_COLORS: Record<string,string> = {
-  'Mechanical':'#00e676','Electrical':'#00b0ff','Plumbing':'#00e676',
-  'Fire Protection':'#ff6d00','Management':'#b388ff','Engineering':'#00bcd4',
-  'Estimating':'#e040fb','Sales':'#ff9100','Construction':'#76ff03',
+  'Mechanical':'#69f0ae','Electrical':'#40c4ff','Plumbing':'#00e676',
+  'Fire Protection':'#ffab40','Management':'#b388ff','Engineering':'#18ffff',
+  'Estimating':'#ea80fc','Sales':'#ffd740','Construction':'#b2ff59',
 }
 
 export default function CandidatesPage() {
@@ -199,9 +199,9 @@ export default function CandidatesPage() {
       {hasFilters&&(
         <div style={{display:'flex',gap:5,marginBottom:8,flexWrap:'wrap',alignItems:'center'}}>
           {search&&<span className="badge badge-blue" style={{fontSize:10}}>🔍 {search}</span>}
-          {stateFilter&&<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:700,color:'white',background:getStateColor(stateFilter)}}>🏛 {US_STATES[stateFilter]}</span>}
+          {stateFilter&&<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:700,color:getStateColor(stateFilter),background:getStateColor(stateFilter)+'18',border:'1px solid '+getStateColor(stateFilter)+'40'}}>🏛 {US_STATES[stateFilter]}</span>}
           {cityFilter&&<span className="badge badge-green" style={{fontSize:10}}>📍 {cityFilter}{radiusMiles>0?` + ${radiusMiles}mi`:''}</span>}
-          {disciplineFilter&&<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:600,color:'white',background:DISC_COLORS[disciplineFilter]||'var(--accent)'}}>🔧 {disciplineFilter}</span>}
+          {disciplineFilter&&<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:600,color:DISC_COLORS[disciplineFilter]||'var(--accent)',background:(DISC_COLORS[disciplineFilter]||'#7c6cff')+'18',border:'1px solid '+(DISC_COLORS[disciplineFilter]||'#7c6cff')+'40'}}>🔧 {disciplineFilter}</span>}
           {tagFilter&&<span className="badge badge-gray" style={{fontSize:10}}>🏷 {tagFilter}</span>}
           <button onClick={clearFilters} style={{fontSize:10,color:'var(--danger)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>Clear</button>
           <span style={{fontSize:11,fontWeight:600,color:'var(--text-secondary)',marginLeft:'auto'}}>{sorted.length} results</span>
@@ -243,17 +243,17 @@ export default function CandidatesPage() {
                     <td onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selected.has(c.id)} onChange={()=>toggleSelect(c.id)} style={{width:14,height:14,cursor:'pointer'}} /></td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
                       <div style={{display:'flex',alignItems:'center',gap:8}}>
-                        <div className="avatar" style={{background:colorFor(c.name),color:'white',width:30,height:30,fontSize:11}}>{initials(c.name)}</div>
+                        <div className="avatar" style={{background:c.avatar_url?'transparent':colorFor(c.name),color:'white',width:30,height:30,fontSize:11}}>{c.avatar_url?<img src={c.avatar_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} />:initials(c.name)}</div>
                         <span style={{fontWeight:600,fontSize:14,color:'var(--accent)'}}>{c.name}</span>
                       </div>
                     </td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer',fontSize:12}}>{c.current_title||'—'}</td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer',fontSize:12}}>{c.current_company||'—'}</td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {c.state?<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:700,color:'white',background:getStateColor(c.state),letterSpacing:'0.03em'}}>{c.state}</span>:'—'}
+                      {c.state?<span style={{display:'inline-flex',alignItems:'center',padding:'3px 10px',borderRadius:100,fontSize:11,fontWeight:700,color:getStateColor(c.state),background:getStateColor(c.state)+'18',letterSpacing:'0.03em',border:'1px solid '+getStateColor(c.state)+'40'}}>{c.state}</span>:'—'}
                     </td>
                     <td className="hide-mobile" onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
-                      {(c.disciplines??[]).slice(0,2).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'3px 8px',borderRadius:100,fontSize:10,fontWeight:700,color:'white',background:DISC_COLORS[d]||'var(--accent)',marginRight:4}}>{d}</span>)}
+                      {(c.disciplines??[]).slice(0,2).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'3px 8px',borderRadius:100,fontSize:10,fontWeight:700,color:DISC_COLORS[d]||'var(--accent)',background:(DISC_COLORS[d]||'#7c6cff')+'18',marginRight:4,border:'1px solid '+(DISC_COLORS[d]||'#7c6cff')+'40'}}>{d}</span>)}
                     </td>
                     <td onClick={()=>setSidePanelId(c.id)} style={{cursor:'pointer'}}>
                       {c.work_phone?<a href={`tel:${c.work_phone}`} onClick={e=>e.stopPropagation()} style={{fontSize:13,color:'var(--neon-blue)',textDecoration:'none',fontWeight:500}} title={c.work_phone}>📞 Call</a>

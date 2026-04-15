@@ -119,6 +119,7 @@ export default function Sidebar() {
   const toggle = (themeCtx as any).toggle || (themeCtx as any).toggleTheme
   const [mobileOpen, setMobileOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
+  const [btc, setBtc] = useState<{price:number;change:number;high:number;low:number}|null>(null)
 
   // Widget cards — static + live RSS merged
   const [allCards, setAllCards] = useState(() => shuffleByDay(STATIC_CARDS))
@@ -150,6 +151,20 @@ export default function Sidebar() {
     fetchFeeds()
     const interval = setInterval(fetchFeeds, 30 * 60 * 1000) // refresh every 30 min
     return () => clearInterval(interval)
+  }, [])
+
+  // Bitcoin price
+  useEffect(() => {
+    const fetchBtc = async () => {
+      try {
+        const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_24hr_high=true&include_24hr_low=true')
+        const d = await r.json()
+        if (d.bitcoin) setBtc({ price: d.bitcoin.usd, change: d.bitcoin.usd_24h_change, high: d.bitcoin.usd_24h_high || 0, low: d.bitcoin.usd_24h_low || 0 })
+      } catch {}
+    }
+    fetchBtc()
+    const t = setInterval(fetchBtc, 60000)
+    return () => clearInterval(t)
   }, [])
 
   // 2-minute synced rotation
@@ -216,28 +231,49 @@ export default function Sidebar() {
           )}
         </nav>
 
-        {/* Widget */}
-        {!zenMode && card ? (
-          <div style={{ padding: '10px 0', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div className="sidebar-widget"
-              onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
-              style={{ opacity: fade ? 1 : 0, transition: 'opacity 0.4s ease' }}>
-              <button className="widget-pause" onClick={(e) => { e.stopPropagation(); rotate() }} title="Skip">↻</button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-                <span style={{ fontSize: 14 }}>{card.icon}</span>
-                <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: catColors[card.cat] || 'var(--accent)' }}>{card.cat}</span>
+        {/* Widgets */}
+        {!zenMode ? (
+          <div style={{ padding: '8px 0', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
+            {/* Bitcoin Ticker */}
+            {btc && (
+              <div className="sidebar-widget" style={{ padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 14 }}>₿</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--warning)' }}>BITCOIN</span>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: btc.change >= 0 ? 'var(--neon-green)' : 'var(--neon-orange)' }}>
+                    {btc.change >= 0 ? '▲' : '▼'} {Math.abs(btc.change).toFixed(1)}%
+                  </span>
+                </div>
+                <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  ${btc.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>H: ${btc.high.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>L: ${btc.low.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                </div>
               </div>
-              <p style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{card.text}</p>
-              <div style={{ display: 'flex', gap: 3, marginTop: 8, justifyContent: 'center' }}>
-                {Array.from({length: Math.min(5, allCards.length)}).map((_, i) => (
-                  <div key={i} style={{ width: i===0?10:4, height: 4, borderRadius: 2, background: i===0?'var(--accent)':'var(--border)', transition: 'all 0.3s' }} />
-                ))}
+            )}
+
+            {/* Content Card — rotates every 2 min */}
+            {card && (
+              <div className="sidebar-widget"
+                onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+                style={{ opacity: fade ? 1 : 0, transition: 'opacity 0.4s ease' }}>
+                <button className="widget-pause" onClick={(e) => { e.stopPropagation(); rotate() }} title="Skip">↻</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                  <span style={{ fontSize: 14 }}>{card.icon}</span>
+                  <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: catColors[card.cat] || 'var(--accent)' }}>{card.cat}</span>
+                </div>
+                <p style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{card.text}</p>
               </div>
-            </div>
+            )}
           </div>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span onClick={() => setZenMode(false)} style={{ fontSize: 18, opacity: 0.2, cursor: 'pointer' }} title="Show widget">📡</span>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span onClick={() => setZenMode(false)} style={{ fontSize: 16, opacity: 0.2, cursor: 'pointer' }} title="Show widgets">₿</span>
+            <span onClick={() => setZenMode(false)} style={{ fontSize: 16, opacity: 0.2, cursor: 'pointer' }} title="Show widgets">📡</span>
           </div>
         )}
 

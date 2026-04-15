@@ -155,6 +155,9 @@ html[data-theme="dark"] .badge-green { text-shadow: 0 0 6px rgba(0,255,136,0.3);
 }
 html[data-theme="dark"] .neon-pill { box-shadow: 0 0 8px currentColor; }
 
+/* Transparent pill glow in dark mode */
+html[data-theme="dark"] td span[style*="border:"] { text-shadow: 0 0 6px currentColor; }
+
 /* BUTTONS */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;

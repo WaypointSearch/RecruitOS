@@ -21,7 +21,31 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [selectedHotlist, setSelectedHotlist] = useState('')
   const [selectedJob, setSelectedJob] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
+
+  const handleAvatarPaste = async (e: React.ClipboardEvent | ClipboardEvent) => {
+    const items = (e as any).clipboardData?.items
+    if (!items) return
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        setUploadingAvatar(true)
+        const blob = item.getAsFile()
+        if (!blob) { setUploadingAvatar(false); return }
+        const ext = blob.type.split('/')[1] || 'png'
+        const path = candidateId + '/avatar-' + Date.now() + '.' + ext
+        const { error } = await sb.storage.from('avatars').upload(path, blob, { upsert: true })
+        if (error) { showToast('Upload failed'); setUploadingAvatar(false); return }
+        const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(path)
+        await (sb as any).from('candidates').update({ avatar_url: publicUrl }).eq('id', candidateId)
+        setC((prev: any) => ({ ...prev, avatar_url: publicUrl }))
+        showToast('Avatar saved!')
+        setUploadingAvatar(false)
+        if (onUpdated) onUpdated()
+      }
+    }
+  }
 
   const load = async () => {
     const {data} = await (sb as any).from('candidates').select('*').eq('id', candidateId).single()
@@ -125,21 +149,31 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
             <button onClick={onNext} disabled={!hasNext} className="btn btn-sm" style={{padding:'3px 10px',fontSize:12,opacity:hasNext?1:0.3}}>Next →</button>
             <button onClick={onClose} style={{background:'none',border:'none',fontSize:20,cursor:'pointer',color:'var(--text-secondary)',padding:'0 4px',marginLeft:4}}>×</button>
           </div>
-          {/* Name + meta */}
-          <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-            <div style={{flex:1,minWidth:0}}>
-              <h2 style={{fontSize:18,fontWeight:700}}>{c.name}</h2>
-              {c.current_title&&<p style={{fontSize:14,color:'var(--text-secondary)'}}>{c.current_title}{c.current_company?` @ ${c.current_company}`:''}</p>}
-              <div style={{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}}>
-                {c.state&&<span style={{display:'inline-flex',padding:'2px 8px',borderRadius:100,fontSize:9,fontWeight:700,color:'white',background:'var(--accent)'}}>{c.state}</span>}
-                {(c.disciplines??[]).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'2px 6px',borderRadius:100,fontSize:9,fontWeight:600,color:'white',background:'var(--success)'}}>{d}</span>)}
-              </div>
+          {/* Avatar + Name — centered card */}
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',paddingBottom:4}}>
+            <div
+              onPaste={handleAvatarPaste}
+              tabIndex={0}
+              title={c.avatar_url ? 'Click and paste (Ctrl+V) to change photo' : 'Click here and paste (Ctrl+V) a photo from clipboard'}
+              style={{width:64,height:64,borderRadius:'50%',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:700,overflow:'hidden',cursor:'pointer',border:'2px solid var(--accent)',background:c.avatar_url?'transparent':'var(--accent)',color:'white',transition:'all 0.2s',outline:'none',position:'relative'}}
+              onFocus={e => e.currentTarget.style.boxShadow='0 0 0 3px var(--accent-bg)'}
+              onBlur={e => e.currentTarget.style.boxShadow='none'}
+            >
+              {uploadingAvatar ? <span style={{fontSize:14}}>⏳</span>
+              : c.avatar_url ? <img src={c.avatar_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+              : c.name?.split(' ').map((w:string)=>w[0]).join('').toUpperCase().slice(0,2)}
             </div>
-            <div style={{display:'flex',gap:4}}>
-              <button onClick={()=>setShowHotlistAdd(!showHotlistAdd)} className="btn btn-sm" style={{fontSize:10,padding:'4px 8px'}}>🔥</button>
-              <button onClick={()=>setShowJobMatch(!showJobMatch)} className="btn btn-sm" style={{fontSize:10,padding:'4px 8px'}}>🎯</button>
-              <Link href={`/candidates/${candidateId}`} className="btn btn-sm" style={{textDecoration:'none',fontSize:11}}>Full →</Link>
+            <h2 style={{fontSize:18,fontWeight:700}}>{c.name}</h2>
+            {c.current_title&&<p style={{fontSize:14,color:'var(--text-secondary)',marginTop:2}}>{c.current_title}{c.current_company?` @ ${c.current_company}`:''}</p>}
+            <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap',justifyContent:'center'}}>
+              {c.state&&<span style={{display:'inline-flex',padding:'3px 10px',borderRadius:100,fontSize:10,fontWeight:700,color:'var(--accent)',background:'var(--accent-bg)',border:'1px solid var(--accent)'}}>{c.state}</span>}
+              {(c.disciplines??[]).map((d:string)=><span key={d} style={{display:'inline-flex',padding:'3px 8px',borderRadius:100,fontSize:9,fontWeight:600,color:'var(--neon-green)',background:'var(--success-bg)',border:'1px solid var(--neon-green)'}}>{d}</span>)}
             </div>
+          </div>
+          <div style={{display:'flex',gap:4,justifyContent:'center',marginTop:6}}>
+            <button onClick={()=>setShowHotlistAdd(!showHotlistAdd)} className="btn btn-sm" style={{fontSize:11,padding:'5px 10px'}}>🔥 Hotlist</button>
+            <button onClick={()=>setShowJobMatch(!showJobMatch)} className="btn btn-sm" style={{fontSize:11,padding:'5px 10px'}}>🎯 Match</button>
+            <Link href={`/candidates/${candidateId}`} className="btn btn-sm" style={{textDecoration:'none',fontSize:11,padding:'5px 10px'}}>Full Profile →</Link>
           </div>
         </div>
 
