@@ -17,6 +17,8 @@ export default function CandidatesPage() {
   const [metroFilter, setMetroFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [disciplineFilter, setDisciplineFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
+  const [allStates, setAllStates] = useState<string[]>([])
   const [radiusMiles, setRadiusMiles] = useState(0)
   const [sortBy, setSortBy] = useState('name')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -53,6 +55,7 @@ export default function CandidatesPage() {
     }
     setCandidates(all)
     setAllTags(Array.from(new Set(all.flatMap((c: any) => c.tags ?? []).filter(Boolean))).sort() as string[])
+    setAllStates(Array.from(new Set(all.map((c: any) => c.state).filter(Boolean))).sort() as string[])
 
     // Last contacted
     const ids = all.slice(0, 500).map((c: any) => c.id); const map: Record<string, string> = {}
@@ -99,6 +102,7 @@ export default function CandidatesPage() {
       if (!(c.metro_area === metroFilter || (c.location || '').toLowerCase().includes(metroFilter.toLowerCase()))) return false
     }
     if (disciplineFilter && !(c.disciplines ?? []).includes(disciplineFilter)) return false
+    if (stateFilter && c.state !== stateFilter) return false
     if (tagFilter && !(c.tags ?? []).includes(tagFilter)) return false
     return true
   })
@@ -136,13 +140,13 @@ export default function CandidatesPage() {
     const { data: { user } } = await sb.auth.getUser()
     await (sb as any).from('saved_searches').insert([{
       name: searchName.trim(), search_query: search, metro_filter: metroFilter,
-      discipline_filter: disciplineFilter, tag_filter: tagFilter, radius_miles: radiusMiles || null, created_by: user?.id,
+      discipline_filter: disciplineFilter, tag_filter: tagFilter, radius_miles: radiusMiles || null, state_filter: stateFilter || null, created_by: user?.id,
     }])
     showToast('Search saved!'); setSearchName(''); setShowSaveSearch(false); load()
   }
   const loadSearch = (s: any) => {
     setSearch(s.search_query || ''); setMetroFilter(s.metro_filter || '')
-    setDisciplineFilter(s.discipline_filter || ''); setTagFilter(s.tag_filter || '')
+    setDisciplineFilter(s.discipline_filter || ''); setStateFilter(s.state_filter || ''); setTagFilter(s.tag_filter || '')
     setRadiusMiles(s.radius_miles || 0); setPage(1); setShowSaved(false); showToast(`Loaded: ${s.name}`)
   }
   const deleteSearch = async (id: string) => {
@@ -158,7 +162,7 @@ export default function CandidatesPage() {
     if (days===0) return 'Today'; if (days===1) return 'Yday'; if (days<7) return `${days}d`; if (days<30) return `${Math.floor(days/7)}w`
     return `${Math.floor(days/30)}mo`
   }
-  const hasFilters = search || metroFilter || tagFilter || disciplineFilter
+  const hasFilters = search || metroFilter || tagFilter || disciplineFilter || stateFilter
 
   return (
     <div>
@@ -221,6 +225,10 @@ export default function CandidatesPage() {
           <option value="">All disciplines</option>
           {getDisciplineNames().map(d => <option key={d} value={d}>{d}</option>)}
         </select>
+        <select value={stateFilter} onChange={e => { setStateFilter(e.target.value); setPage(1) }} style={{ maxWidth: 100 }}>
+          <option value="">All states</option>
+          {allStates.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <select value={tagFilter} onChange={e => { setTagFilter(e.target.value); setPage(1) }} style={{ maxWidth: 120 }}>
           <option value="">All tags</option>
           {allTags.map(t => <option key={t} value={t}>{t}</option>)}
@@ -250,9 +258,10 @@ export default function CandidatesPage() {
           {search && <span className="badge badge-blue" style={{ fontSize: 10 }}>🔍 {search}</span>}
           {metroFilter && <span className="badge badge-green" style={{ fontSize: 10 }}>📍 {metroFilter}{radiusMiles > 0 ? ` +${radiusMiles}mi` : ''}</span>}
           {disciplineFilter && <span className="badge badge-yellow" style={{ fontSize: 10 }}>🔧 {disciplineFilter}</span>}
+          {stateFilter && <span className="badge badge-gray" style={{ fontSize: 10 }}>🏛 {stateFilter}</span>}
           {tagFilter && <span className="badge badge-gray" style={{ fontSize: 10 }}>🏷 {tagFilter}</span>}
           {radiusResults !== null && <span style={{ fontSize: 10, color: 'var(--success)' }}>🛰 PostGIS radius active</span>}
-          <button onClick={() => { setSearch(''); setMetroFilter(''); setTagFilter(''); setDisciplineFilter(''); setRadiusMiles(0); setRadiusResults(null); setPage(1) }}
+          <button onClick={() => { setSearch(''); setMetroFilter(''); setTagFilter(''); setDisciplineFilter(''); setStateFilter(''); setRadiusMiles(0); setRadiusResults(null); setPage(1) }}
             style={{ fontSize: 10, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 'auto' }}>{sorted.length} results</span>
         </div>
