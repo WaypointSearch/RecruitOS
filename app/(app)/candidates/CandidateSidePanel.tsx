@@ -23,8 +23,8 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [selectedJob, setSelectedJob] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [findingPhone, setFindingPhone] = useState(false)
-  const [phoneResult, setPhoneResult] = useState<any>(null)
+  const [enriching, setEnriching] = useState(false)
+  const [enrichResult, setEnrichResult] = useState<any>(null)
   const [avatarFocused, setAvatarFocused] = useState(false)
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -100,34 +100,33 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     showToast('Added to hotlist! 🔥'); setShowHotlistAdd(false); setSelectedHotlist('')
   }
 
-  const findWorkPhone = async () => {
+  const enrichCandidate = async (mode: 'phone' | 'email' | 'both' = 'both') => {
     if (!c.current_company) { showToast('Need company name first'); return }
+    setEnriching(true); setEnrichResult(null)
+    const nameParts = (c.name || '').split(' ')
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
     const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
-    if (!city) { showToast('Need city/location first'); return }
-    setFindingPhone(true); setPhoneResult(null)
     try {
-      const res = await fetch('/api/find-phone', {
+      const res = await fetch('/api/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          company: c.current_company,
-          city,
-          state: c.state || '',
-          candidateId: candidateId,
-          candidateName: c.name,
+          candidateId, firstName, lastName,
+          company: c.current_company, city, state: c.state || '',
+          companyDomain: c.current_company_url?.replace(/https?:\/\//, '').replace(/^www\./, '').split('/')[0] || '',
+          mode,
         }),
       })
       const data = await res.json()
-      setPhoneResult(data)
-      if (data.phone) {
-        setC((prev: any) => ({ ...prev, work_phone: data.phone }))
-        showToast(data.verified ? '📞 Phone found & verified!' : '📞 Phone found (unverified)')
-        if (onUpdated) onUpdated()
-      } else {
-        showToast(data.error || 'No phone found')
-      }
-    } catch (err) { showToast('Lookup failed — check API keys') }
-    setFindingPhone(false)
+      setEnrichResult(data)
+      if (data.phone) setC((prev: any) => ({ ...prev, work_phone: data.phone }))
+      if (data.email) setC((prev: any) => ({ ...prev, work_email: data.email }))
+      const found = [data.phone && '📞 Phone', data.email && '✉️ Email'].filter(Boolean)
+      if (found.length > 0) { showToast('Found: ' + found.join(' + ')); if (onUpdated) onUpdated() }
+      else showToast(data.error || 'No results — try manual lookup')
+    } catch { showToast('Lookup failed — check API keys') }
+    setEnriching(false)
   }
 
   const matchToJob = async () => {
@@ -270,17 +269,35 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
               <Field label="Personal Email" field="personal_email" type="email" />
             </div>
             {c.linkedin&&<div style={{marginTop:2}}><label style={{fontSize:9,fontWeight:700,color:'var(--accent)',textTransform:'uppercase'}}>LinkedIn</label><a href={c.linkedin} target="_blank" rel="noreferrer" style={{fontSize:11,color:'var(--accent)',display:'block',wordBreak:'break-all'}}>{c.linkedin.length>55?c.linkedin.slice(0,53)+'…':c.linkedin}</a></div>}
-            {/* Find Work Phone */}
-            {!c.work_phone && (
-              <button onClick={findWorkPhone} disabled={findingPhone} className="btn btn-sm" style={{marginTop:8,width:'100%',justifyContent:'center',background:findingPhone?'var(--accent-bg)':'transparent',color:'var(--neon-blue)',borderColor:'var(--neon-blue)',fontSize:12}}>
-                {findingPhone ? '🔍 Searching...' : '📞 Find Work Phone'}
-              </button>
+
+            {/* Find Work Info — Enrich Button */}
+            {(!c.work_phone || !c.work_email) && (
+              <div style={{marginTop:10,display:'flex',gap:6,flexWrap:'wrap'}}>
+                {!c.work_phone && !c.work_email && (
+                  <button onClick={()=>enrichCandidate('both')} disabled={enriching} className="btn btn-sm" style={{flex:1,justifyContent:'center',color:'var(--neon-green)',borderColor:'var(--neon-green)',fontSize:12}}>
+                    {enriching ? '🔍 Searching...' : '🔎 Find Work Info'}
+                  </button>
+                )}
+                {!c.work_phone && c.work_email && (
+                  <button onClick={()=>enrichCandidate('phone')} disabled={enriching} className="btn btn-sm" style={{flex:1,justifyContent:'center',color:'var(--neon-blue)',borderColor:'var(--neon-blue)',fontSize:12}}>
+                    {enriching ? '🔍 ...' : '📞 Find Phone'}
+                  </button>
+                )}
+                {c.work_phone && !c.work_email && (
+                  <button onClick={()=>enrichCandidate('email')} disabled={enriching} className="btn btn-sm" style={{flex:1,justifyContent:'center',color:'var(--neon-blue)',borderColor:'var(--neon-blue)',fontSize:12}}>
+                    {enriching ? '🔍 ...' : '✉️ Find Email'}
+                  </button>
+                )}
+              </div>
             )}
-            {phoneResult && !phoneResult.phone && (
-              <p style={{fontSize:11,color:'var(--text-tertiary)',marginTop:4,textAlign:'center'}}>{phoneResult.error}</p>
+            {enrichResult && !enrichResult.phone && !enrichResult.email && enrichResult.error && (
+              <p style={{fontSize:11,color:'var(--text-tertiary)',marginTop:6,textAlign:'center'}}>{enrichResult.error}</p>
             )}
-            {phoneResult && phoneResult.phone && !phoneResult.verified && (
-              <p style={{fontSize:10,color:'var(--warning)',marginTop:4,textAlign:'center'}}>⚠ Found but unverified: {phoneResult.reason}</p>
+            {enrichResult?.emailPatterns && enrichResult.emailSource === 'pattern_guess' && (
+              <div style={{marginTop:6,padding:'6px 8px',borderRadius:6,background:'var(--accent-bg)',fontSize:10,color:'var(--text-secondary)'}}>
+                <p style={{fontWeight:600,marginBottom:2,color:'var(--accent)'}}>Best guesses:</p>
+                {enrichResult.emailPatterns.slice(0,3).map((p:string,i:number)=><p key={i} style={{fontSize:11,color:'var(--text-secondary)'}}>{i===0?'⭐':' '} {p}</p>)}
+              </div>
             )}
           </div>
 
