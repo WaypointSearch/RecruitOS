@@ -23,8 +23,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [selectedJob, setSelectedJob] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [enriching, setEnriching] = useState(false)
-  const [enrichResult, setEnrichResult] = useState<any>(null)
+  const [findingPhone, setFindingPhone] = useState(false)
   const [avatarFocused, setAvatarFocused] = useState(false)
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -100,33 +99,27 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     showToast('Added to hotlist! 🔥'); setShowHotlistAdd(false); setSelectedHotlist('')
   }
 
-  const enrichCandidate = async (mode: 'phone' | 'email' | 'both' = 'both') => {
-    if (!c.current_company) { showToast('Need company name first'); return }
-    setEnriching(true); setEnrichResult(null)
-    const nameParts = (c.name || '').split(' ')
-    const firstName = nameParts[0] || ''
-    const lastName = nameParts.slice(1).join(' ') || ''
+  const findWorkPhone = async () => {
+    if (!c.current_company) { showToast('Need company name to search'); return }
     const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
+    if (!city) { showToast('Need city or location to search'); return }
+    setFindingPhone(true)
     try {
-      const res = await fetch('/api/enrich', {
+      const res = await fetch('/api/find-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidateId, firstName, lastName,
-          company: c.current_company, city, state: c.state || '',
-          companyDomain: c.current_company_url?.replace(/https?:\/\//, '').replace(/^www\./, '').split('/')[0] || '',
-          mode,
-        }),
+        body: JSON.stringify({ candidateId, company: c.current_company, city, state: c.state || '' }),
       })
       const data = await res.json()
-      setEnrichResult(data)
-      if (data.phone) setC((prev: any) => ({ ...prev, work_phone: data.phone }))
-      if (data.email) setC((prev: any) => ({ ...prev, work_email: data.email }))
-      const found = [data.phone && '📞 Phone', data.email && '✉️ Email'].filter(Boolean)
-      if (found.length > 0) { showToast('Found: ' + found.join(' + ')); if (onUpdated) onUpdated() }
-      else showToast(data.error || 'No results — try manual lookup')
-    } catch { showToast('Lookup failed — check API keys') }
-    setEnriching(false)
+      if (data.phone) {
+        setC((prev: any) => ({ ...prev, work_phone: data.phone }))
+        showToast('📞 Found: ' + data.phone)
+        if (onUpdated) onUpdated()
+      } else {
+        showToast(data.error || 'No local number found')
+      }
+    } catch { showToast('Lookup failed — check API keys in Vercel') }
+    setFindingPhone(false)
   }
 
   const matchToJob = async () => {
@@ -269,35 +262,11 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
               <Field label="Personal Email" field="personal_email" type="email" />
             </div>
             {c.linkedin&&<div style={{marginTop:2}}><label style={{fontSize:9,fontWeight:700,color:'var(--accent)',textTransform:'uppercase'}}>LinkedIn</label><a href={c.linkedin} target="_blank" rel="noreferrer" style={{fontSize:11,color:'var(--accent)',display:'block',wordBreak:'break-all'}}>{c.linkedin.length>55?c.linkedin.slice(0,53)+'…':c.linkedin}</a></div>}
-
-            {/* Find Work Info — Enrich Button */}
-            {(!c.work_phone || !c.work_email) && (
-              <div style={{marginTop:10,display:'flex',gap:6,flexWrap:'wrap'}}>
-                {!c.work_phone && !c.work_email && (
-                  <button onClick={()=>enrichCandidate('both')} disabled={enriching} className="btn btn-sm" style={{flex:1,justifyContent:'center',color:'var(--neon-green)',borderColor:'var(--neon-green)',fontSize:12}}>
-                    {enriching ? '🔍 Searching...' : '🔎 Find Work Info'}
-                  </button>
-                )}
-                {!c.work_phone && c.work_email && (
-                  <button onClick={()=>enrichCandidate('phone')} disabled={enriching} className="btn btn-sm" style={{flex:1,justifyContent:'center',color:'var(--neon-blue)',borderColor:'var(--neon-blue)',fontSize:12}}>
-                    {enriching ? '🔍 ...' : '📞 Find Phone'}
-                  </button>
-                )}
-                {c.work_phone && !c.work_email && (
-                  <button onClick={()=>enrichCandidate('email')} disabled={enriching} className="btn btn-sm" style={{flex:1,justifyContent:'center',color:'var(--neon-blue)',borderColor:'var(--neon-blue)',fontSize:12}}>
-                    {enriching ? '🔍 ...' : '✉️ Find Email'}
-                  </button>
-                )}
-              </div>
-            )}
-            {enrichResult && !enrichResult.phone && !enrichResult.email && enrichResult.error && (
-              <p style={{fontSize:11,color:'var(--text-tertiary)',marginTop:6,textAlign:'center'}}>{enrichResult.error}</p>
-            )}
-            {enrichResult?.emailPatterns && enrichResult.emailSource === 'pattern_guess' && (
-              <div style={{marginTop:6,padding:'6px 8px',borderRadius:6,background:'var(--accent-bg)',fontSize:10,color:'var(--text-secondary)'}}>
-                <p style={{fontWeight:600,marginBottom:2,color:'var(--accent)'}}>Best guesses:</p>
-                {enrichResult.emailPatterns.slice(0,3).map((p:string,i:number)=><p key={i} style={{fontSize:11,color:'var(--text-secondary)'}}>{i===0?'⭐':' '} {p}</p>)}
-              </div>
+            {!c.work_phone && c.current_company && (
+              <button onClick={findWorkPhone} disabled={findingPhone} className="btn btn-sm"
+                style={{marginTop:10,width:'100%',justifyContent:'center',fontSize:13,color:'var(--neon-green)',borderColor:'var(--neon-green)'}}>
+                {findingPhone ? '🔍 Searching '+c.current_company+'...' : '📞 Find Work Phone'}
+              </button>
             )}
           </div>
 

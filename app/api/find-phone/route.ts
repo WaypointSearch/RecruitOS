@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Env vars: GOOGLE_PLACES_API_KEY, OPENAI_API_KEY, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+// Only needs: SERPER_API_KEY, OPENAI_API_KEY (optional), NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,143 +10,108 @@ const supabase = createClient(
 
 function normalizeCompany(name: string): string {
   return name.toLowerCase()
-    .replace(/,?\s*(inc|llc|llp|corp|co|ltd|group|associates|consulting|engineers|architects|pllc|pc|lp)\.?$/gi, '')
+    .replace(/,?\s*(inc|llc|llp|corp|corporation|co|ltd|group|associates|consulting|engineers|architects|pllc|pc|lp)\.?$/gi, '')
     .replace(/[^a-z0-9\s]/g, '')
     .trim()
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { company, city, state, candidateId, candidateName } = await req.json()
+    const { candidateId, company, city, state } = await req.json()
 
-    if (!company || !city) {
-      return NextResponse.json({ error: 'Company and city are required' }, { status: 400 })
-    }
+    if (!company) return NextResponse.json({ error: 'Company name is required' }, { status: 400 })
+    if (!city) return NextResponse.json({ error: 'City or metro area is required' }, { status: 400 })
 
     const companyKey = normalizeCompany(company)
+    const cityClean = city.trim().toLowerCase()
     const stateClean = (state || '').trim().toUpperCase()
 
-    // ──────────────────────────────────────────────
-    // LAYER 1: Cache check (free, instant)
-    // ──────────────────────────────────────────────
+    // ═══ LAYER 1: Cache ═══  (free, instant)
     const { data: cached } = await supabase
       .from('phone_cache')
-      .select('phone, address, source, verified')
+      .select('phone, address, business_name')
       .eq('company_key', companyKey)
-      .eq('city', city.toLowerCase())
-      .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+      .eq('city', cityClean)
+      .gte('created_at', new Date(Date.now() - 90 * 86400000).toISOString())
       .limit(1)
       .single()
 
     if (cached?.phone) {
-      // Update the candidate directly
       if (candidateId) {
         await supabase.from('candidates').update({ work_phone: cached.phone }).eq('id', candidateId)
       }
-      return NextResponse.json({
-        phone: cached.phone,
-        address: cached.address,
-        source: 'cache',
-        verified: cached.verified,
-      })
+      return NextResponse.json({ phone: cached.phone, address: cached.address, source: 'cache' })
     }
 
-    // ──────────────────────────────────────────────
-    // LAYER 2: Google Places API (New) — searchText
-    // Single call with field masking = ~$0.005/request
-    // ──────────────────────────────────────────────
-    const googleKey = process.env.GOOGLE_PLACES_API_KEY
-    if (!googleKey) {
-      return NextResponse.json({ error: 'Google Places API key not configured. Add GOOGLE_PLACES_API_KEY to Vercel env vars.' }, { status: 500 })
+    // ═══ LAYER 2: Serper.dev search ═══  ($0.001/search, 2500 free/month)
+    const serperKey = process.env.SERPER_API_KEY
+    if (!serperKey) {
+      return NextResponse.json({ error: 'Add SERPER_API_KEY to Vercel env vars. Get free key at serper.dev' }, { status: 500 })
     }
 
-    const searchQuery = `${company} ${city} ${stateClean}`.trim()
+    // Search ONLY for the company + location — no candidate name involved
+    const query = `"${company}" "${city}" ${stateClean} office phone number contact`
 
-    const placesRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    const serperRes = await fetch('https://google.serper.dev/search', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': googleKey,
-        // Field masking — ONLY request Basic fields ($5/1K)
-        // nationalPhoneNumber, formattedAddress, displayName are all Basic tier
-        'X-Goog-FieldMask': 'places.displayName,places.nationalPhoneNumber,places.formattedAddress,places.types',
-      },
-      body: JSON.stringify({
-        textQuery: searchQuery,
-        maxResultCount: 3,
-        languageCode: 'en',
-      }),
+      headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: query, num: 6 }),
     })
 
-    if (!placesRes.ok) {
-      const errText = await placesRes.text()
-      console.error('Google Places error:', errText)
-      return NextResponse.json({ error: 'Google Places API error', details: errText }, { status: 502 })
+    if (!serperRes.ok) {
+      return NextResponse.json({ error: 'Search failed — check Serper API key' }, { status: 502 })
     }
 
-    const placesData = await placesRes.json()
-    const places = placesData.places || []
+    const data = await serperRes.json()
 
-    if (places.length === 0) {
-      return NextResponse.json({ error: 'No results found for this company in this location', phone: null })
+    // Gather all snippets
+    const snippets: string[] = []
+    if (data.knowledgeGraph?.phoneNumber) {
+      snippets.push(`KNOWLEDGE GRAPH — Business: ${data.knowledgeGraph.title || company}, Phone: ${data.knowledgeGraph.phoneNumber}, Address: ${data.knowledgeGraph.address || 'N/A'}`)
+    }
+    for (const p of (data.places || []).slice(0, 3)) {
+      snippets.push(`PLACES — ${p.title || ''} | ${p.address || ''} | Phone: ${p.phone || 'none'}`)
+    }
+    for (const r of (data.organic || []).slice(0, 5)) {
+      if (r.snippet) snippets.push(`WEB — ${r.title}: ${r.snippet}`)
     }
 
-    // Find best match — prefer result with a phone number
-    const bestMatch = places.find((p: any) => p.nationalPhoneNumber) || places[0]
-
-    if (!bestMatch.nationalPhoneNumber) {
-      return NextResponse.json({
-        error: 'Found the business but no phone number listed',
-        address: bestMatch.formattedAddress,
-        businessName: bestMatch.displayName?.text,
-        phone: null,
-      })
+    if (snippets.length === 0) {
+      return NextResponse.json({ phone: null, error: 'No search results found for this company in this location' })
     }
 
-    const foundPhone = bestMatch.nationalPhoneNumber
-    const foundAddress = bestMatch.formattedAddress || ''
-    const foundName = bestMatch.displayName?.text || ''
-
-    // ──────────────────────────────────────────────
-    // LAYER 3: GPT-4o mini validation
-    // Catches HQ vs local, wrong company, wrong city
-    // Cost: ~$0.0003/request
-    // ──────────────────────────────────────────────
-    let verified = true
+    // ═══ LAYER 3: Extract phone number ═══
     const openaiKey = process.env.OPENAI_API_KEY
+    let phone: string | null = null
+    let address: string | null = null
+    let businessName: string | null = null
 
     if (openaiKey) {
+      // GPT-4o mini extraction — smart, catches HQ vs local
+      const prompt = `Extract the LOCAL office phone number for "${company}" in "${city}, ${stateClean}".
+
+SEARCH RESULTS:
+${snippets.map((s, i) => `[${i + 1}] ${s}`).join('\n')}
+
+RULES:
+- ONLY return a phone number that appears in the search results above
+- NEVER make up a phone number
+- REJECT 1-800, 1-888, 1-877, 1-866 toll-free numbers — we need LOCAL office
+- PREFER numbers with area codes matching ${city} region
+- If KNOWLEDGE GRAPH or PLACES has a local number, prefer that
+- If multiple offices appear, pick the one in ${city}
+
+Reply with ONLY this JSON (no markdown):
+{"phone":"(XXX) XXX-XXXX","address":"street address if found","business":"business name as listed","confidence":0.0-1.0}`
+
       try {
-        const validationPrompt = `You are a data validation assistant. Verify this phone lookup result.
-
-CANDIDATE INFO:
-- Works at: "${company}"
-- City: "${city}"
-- State: "${stateClean}"
-${candidateName ? `- Name: "${candidateName}"` : ''}
-
-GOOGLE PLACES RESULT:
-- Business: "${foundName}"
-- Address: "${foundAddress}"
-- Phone: "${foundPhone}"
-
-TASK: Determine if this is the correct LOCAL office phone for where this candidate works.
-
-CHECK THESE:
-1. Is "${foundName}" the same company as "${company}" (allowing for abbreviations, DBA names)?
-2. Is the address in or near "${city}, ${stateClean}" (within reasonable commuting distance)?
-3. Is this likely a local office number (not a national hotline or unrelated business)?
-
-Reply with ONLY a JSON object:
-{"valid": true/false, "confidence": 0.0-1.0, "reason": "brief explanation"}`
-
         const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
           body: JSON.stringify({
             model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: validationPrompt }],
-            temperature: 0.1,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.05,
             max_tokens: 150,
           }),
         })
@@ -154,59 +119,61 @@ Reply with ONLY a JSON object:
         if (gptRes.ok) {
           const gptData = await gptRes.json()
           const content = gptData.choices?.[0]?.message?.content || ''
+          const cleaned = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim()
           try {
-            // Extract JSON from response
-            const jsonMatch = content.match(/\{[\s\S]*\}/)
-            if (jsonMatch) {
-              const validation = JSON.parse(jsonMatch[0])
-              verified = validation.valid === true && (validation.confidence || 0) >= 0.6
-              if (!verified) {
-                return NextResponse.json({
-                  phone: foundPhone,
-                  address: foundAddress,
-                  businessName: foundName,
-                  verified: false,
-                  reason: validation.reason || 'Could not verify as correct local office',
-                  source: 'google_places_unverified',
-                })
+            const result = JSON.parse(cleaned)
+            if (result.phone && result.phone !== 'null' && (result.confidence || 0) >= 0.5) {
+              // Reject toll-free
+              const digits = result.phone.replace(/\D/g, '')
+              const tollFree = ['800','888','877','866','855','844','833']
+              const areaCode = digits.length >= 10 ? digits.slice(digits.length - 10, digits.length - 7) : ''
+              if (!tollFree.includes(areaCode)) {
+                phone = result.phone
+                address = result.address || null
+                businessName = result.business || null
               }
             }
-          } catch { /* JSON parse failed — still use the result but mark as unverified */ }
+          } catch {}
         }
-      } catch (e) {
-        console.error('GPT validation error:', e)
-        // Proceed without validation — still better than no phone
+      } catch {}
+    }
+
+    // Fallback: regex extraction if GPT fails or no key
+    if (!phone) {
+      const allText = snippets.join(' ')
+      // Match phone patterns, skip toll-free
+      const phoneMatches = allText.match(/\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g) || []
+      const tollFree = ['800','888','877','866','855','844','833']
+      for (const m of phoneMatches) {
+        const d = m.replace(/\D/g, '')
+        const ac = d.slice(0, 3)
+        if (!tollFree.includes(ac)) { phone = m; break }
       }
     }
 
-    // ──────────────────────────────────────────────
-    // LAYER 4: Cache the result (upsert)
-    // ──────────────────────────────────────────────
+    if (!phone) {
+      return NextResponse.json({ phone: null, error: 'Could not find a local phone number — try manual lookup', snippets: snippets.slice(0, 2) })
+    }
+
+    // ═══ LAYER 4: Cache + update candidate ═══
     await supabase.from('phone_cache').upsert([{
       company_key: companyKey,
       company_name: company,
-      city: city.toLowerCase(),
+      city: cityClean,
       state: stateClean,
-      phone: foundPhone,
-      address: foundAddress,
-      business_name: foundName,
-      verified,
-      source: 'google_places_v1',
+      phone,
+      address,
+      business_name: businessName,
+      verified: !!openaiKey,
+      source: openaiKey ? 'serper_gpt' : 'serper_regex',
       created_at: new Date().toISOString(),
     }], { onConflict: 'company_key,city' })
 
-    // Update the candidate's work_phone
     if (candidateId) {
-      await supabase.from('candidates').update({ work_phone: foundPhone }).eq('id', candidateId)
+      await supabase.from('candidates').update({ work_phone: phone }).eq('id', candidateId)
     }
 
-    return NextResponse.json({
-      phone: foundPhone,
-      address: foundAddress,
-      businessName: foundName,
-      verified,
-      source: 'google_places_v1',
-    })
+    return NextResponse.json({ phone, address, businessName, source: openaiKey ? 'serper_gpt' : 'serper_regex' })
 
   } catch (err: any) {
     console.error('Find phone error:', err)
