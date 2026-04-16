@@ -97,7 +97,7 @@ export default function CandidatesPage() {
   const baseList = radiusResults!==null?radiusResults:candidates
   const filtered = baseList.filter((c:any)=>{
     const kws=search.toLowerCase().trim().split(/\s+/).filter(Boolean)
-    if(kws.length>0){const s=[c.name,c.current_title,c.current_company,c.location,c.metro_area,c.state,c.email,c.work_email,c.previous_title,c.previous_company,c.linkedin,...(c.tags??[]),...(c.disciplines??[])].filter(Boolean).join(' ').toLowerCase();if(!kws.every((kw:string)=>s.includes(kw)))return false}
+    if(kws.length>0){const s=[c.name,c.current_title,c.current_company,c.location,c.metro_area,c.state,c.email,c.work_email,c.previous_title,c.previous_company,c.linkedin,c.ai_notes,...(c.tags??[]),...(c.disciplines??[])].filter(Boolean).join(' ').toLowerCase();if(!kws.every((kw:string)=>s.includes(kw)))return false}
     if(stateFilter&&radiusResults===null){if(c.state!==stateFilter){const sn=US_STATES[stateFilter]?.toLowerCase();if(!sn||!(c.location||'').toLowerCase().includes(sn))return false}}
     if(cityFilter&&radiusMiles<=0&&radiusResults===null){if(!(c.location||'').toLowerCase().includes(cityFilter.toLowerCase())&&c.metro_area!==cityFilter)return false}
     if(disciplineFilter&&!(c.disciplines??[]).includes(disciplineFilter))return false

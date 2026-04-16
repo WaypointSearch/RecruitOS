@@ -92,7 +92,7 @@ export default function CandidateDetailPage() {
               onFocus={() => setAvatarFocused(true)}
               onBlur={() => setAvatarFocused(false)}
               title="Click, then Ctrl+V to paste photo"
-              style={{ width: 80, height: 80, borderRadius: '50%', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '3px solid var(--neon-green)' : '3px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 20px var(--neon-green)' : 'none' }}
+              style={{ width: 96, height: 96, borderRadius: '50%', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '3px solid var(--neon-green)' : '3px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 20px var(--neon-green)' : 'none' }}
             >
               {uploadingAvatar ? '⏳' : c.avatar_url ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
             </div>
