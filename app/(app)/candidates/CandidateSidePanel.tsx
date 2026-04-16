@@ -35,18 +35,19 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [toast, setToast] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarFocused, setAvatarFocused] = useState(false)
-  // Enrichment
+  // Phone
+  const [findingPhone, setFindingPhone] = useState(false)
+  const [phoneResults, setPhoneResults] = useState<any[] | null>(null)
+  // AI Summary
   const [enriching, setEnriching] = useState(false)
-  const [enrichResult, setEnrichResult] = useState<any>(null)
-  // Message generator
-  const [showMsgGen, setShowMsgGen] = useState(false)
+  // Messages
   const [generatingMsg, setGeneratingMsg] = useState(false)
   const [generatedMsg, setGeneratedMsg] = useState('')
   const [msgType, setMsgType] = useState('')
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500) }
 
-  // Avatar paste
+  // Avatar paste handler
   const handlePaste = useCallback(async (e: ClipboardEvent) => {
     if (!avatarFocused) return
     const items = e.clipboardData?.items
@@ -80,7 +81,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     const { data: j } = await (sb as any).from('jobs').select('id, title, companies(name)').eq('status', 'Active').order('title')
     setJobs(j ?? [])
   }
-  useEffect(() => { load(); setEnrichResult(null); setGeneratedMsg(''); setMsgType('') }, [candidateId])
+  useEffect(() => { load(); setPhoneResults(null); setGeneratedMsg(''); setMsgType('') }, [candidateId])
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -118,57 +119,64 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
     showToast('Matched! 🎯'); setShowJobMatch(false); load()
   }
 
-  // ═══ ENRICH ═══
-  const enrichCandidate = async () => {
-    setEnriching(true); setEnrichResult(null)
+  // ═══ FIND PHONE — uses v21 robust double-search endpoint ═══
+  const findWorkPhone = async () => {
+    if (!c.current_company) { showToast('Need company name'); return }
+    const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
+    if (!city) { showToast('Need city/location'); return }
+    setFindingPhone(true); setPhoneResults(null)
+    try {
+      const res = await fetch('/api/find-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId, company: c.current_company, city, state: c.state || '' }) })
+      const data = await res.json()
+      if (data.phones?.length > 0) {
+        setPhoneResults(data.phones)
+        if (data.autoApplied) {
+          setC((prev: any) => ({ ...prev, work_phone: data.phones[0].number }))
+          showToast('📞 Found: ' + data.phones[0].number)
+          if (onUpdated) onUpdated()
+        }
+      } else showToast(data.error || 'No numbers found')
+    } catch { showToast('Lookup failed') }
+    setFindingPhone(false)
+  }
+
+  const confirmPhone = async (phone: string) => {
     const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
     try {
-      const res = await fetch('/api/enrich', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, name: c.name, company: c.current_company, city, state: c.state || '' }),
-      })
+      const res = await fetch('/api/find-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', confirmedPhone: phone, candidateId, company: c.current_company, city, state: c.state || '' }) })
       const data = await res.json()
-      setEnrichResult(data)
-      // Update local state with what was found
-      if (data.avatar) setC((prev: any) => ({ ...prev, avatar_url: data.avatar }))
-      if (data.phone) setC((prev: any) => ({ ...prev, work_phone: data.phone }))
-      if (data.publicEmail) setC((prev: any) => ({ ...prev, work_email: data.publicEmail }))
-      if (data.summary) setC((prev: any) => ({ ...prev, ai_notes: data.summary + (data.skills?.length ? '\n\nSkills: ' + data.skills.join(', ') : '') }))
-      if (data.linkedinUrl) setC((prev: any) => ({ ...prev, linkedin: prev.linkedin || data.linkedinUrl }))
-      const found = [data.avatar && '📸 Photo', data.phone && '📞 Phone', data.summary && '🧠 Summary', data.publicEmail && '✉️ Email'].filter(Boolean)
-      showToast(found.length > 0 ? 'Found: ' + found.join(', ') : 'No new data found')
+      setC((prev: any) => ({ ...prev, work_phone: phone }))
+      setPhoneResults(null)
+      showToast(data.propagated > 0 ? `✅ Confirmed & applied to ${data.propagated} others` : '✅ Confirmed')
       if (onUpdated) onUpdated()
-    } catch { showToast('Enrichment failed — check API keys') }
+    } catch { showToast('Error confirming') }
+  }
+
+  // ═══ AI SUMMARY — separate from phone ═══
+  const enrichSummary = async () => {
+    setEnriching(true)
+    const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
+    try {
+      const res = await fetch('/api/enrich', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId, name: c.name, company: c.current_company, city, state: c.state || '',
+          title: c.current_title, disciplines: c.disciplines, previousTitle: c.previous_title, previousCompany: c.previous_company }) })
+      const data = await res.json()
+      if (data.aiNotes) {
+        setC((prev: any) => ({ ...prev, ai_notes: data.aiNotes, linkedin: prev.linkedin || data.linkedinUrl }))
+        showToast('🧠 AI Summary generated!')
+        if (onUpdated) onUpdated()
+      } else showToast(data.error || 'No summary generated')
+    } catch { showToast('Failed — check API keys') }
     setEnriching(false)
   }
 
-  // Confirm a phone from results
-  const confirmPhone = async (phone: string) => {
-    const city = c.location?.split(',')[0]?.trim() || c.metro_area || ''
-    await (sb as any).from('candidates').update({ work_phone: phone }).eq('id', candidateId)
-    // Cache as confirmed + propagate
-    if (c.current_company && city) {
-      const companyKey = normalizeCompany(c.current_company)
-      await (sb as any).from('phone_cache').upsert([{
-        company_key: companyKey, company_name: c.current_company,
-        city: city.toLowerCase(), state: (c.state || '').toUpperCase(),
-        phone, verified: true, source: 'user_confirmed', created_at: new Date().toISOString(),
-      }], { onConflict: 'company_key,city' })
-      // Propagate
-      const { data: others } = await (sb as any).from('candidates').select('id')
-        .ilike('current_company', `%${companyKey.split(' ').slice(0, 2).join('%')}%`)
-        .is('work_phone', null)
-      if (others?.length > 0) {
-        for (const o of others) await (sb as any).from('candidates').update({ work_phone: phone }).eq('id', o.id)
-        showToast(`✅ Confirmed & applied to ${others.length} others`)
-      } else showToast('✅ Confirmed')
-    } else showToast('✅ Confirmed')
-    setC((prev: any) => ({ ...prev, work_phone: phone }))
-    setEnrichResult(null); if (onUpdated) onUpdated()
-  }
-
-  function normalizeCompany(name: string): string {
-    return name.toLowerCase().replace(/,?\s*(inc|llc|llp|corp|co|ltd|group|associates|consulting|engineers|architects|pllc)\.?$/gi, '').replace(/[^a-z0-9\s&]/g, '').trim()
+  const clearSummary = async () => {
+    await (sb as any).from('candidates').update({ ai_notes: null }).eq('id', candidateId)
+    setC((prev: any) => ({ ...prev, ai_notes: null }))
+    showToast('Summary cleared')
+    if (onUpdated) onUpdated()
   }
 
   // Message generator
@@ -235,11 +243,11 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             <div tabIndex={0} onClick={e => e.currentTarget.focus()} onFocus={() => setAvatarFocused(true)} onBlur={() => setAvatarFocused(false)}
-              title="Click then Ctrl+V to paste photo"
+              title="Click then Ctrl+V to paste photo from LinkedIn"
               style={{ width: 64, height: 64, borderRadius: '50%', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '2px solid var(--neon-green)' : '2px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 16px var(--neon-green)' : 'none' }}>
               {uploadingAvatar ? '⏳' : c.avatar_url ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
             </div>
-            {avatarFocused && <p style={{ fontSize: 10, color: 'var(--neon-green)', marginBottom: 4, fontWeight: 600 }}>Paste image (Ctrl+V)</p>}
+            {avatarFocused && <p style={{ fontSize: 10, color: 'var(--neon-green)', marginBottom: 4, fontWeight: 600 }}>Paste photo (Ctrl+V)</p>}
             <h2 style={{ fontSize: 18, fontWeight: 700 }}>{c.name}</h2>
             {c.current_title && <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>{c.current_title}{c.current_company ? ` @ ${c.current_company}` : ''}</p>}
             <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -247,12 +255,9 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
               {(c.disciplines ?? []).map((d: string) => <span key={d} className="panel-pill-glow" style={{ padding: '3px 8px', borderRadius: 100, fontSize: 9, fontWeight: 600, color: 'var(--neon-green)', background: 'var(--success-bg)', border: '1px solid var(--neon-green)' }}>{d}</span>)}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
             <button onClick={() => setShowHotlistAdd(!showHotlistAdd)} className="btn btn-sm" style={{ fontSize: 11 }}>🔥 Hotlist</button>
             <button onClick={() => setShowJobMatch(!showJobMatch)} className="btn btn-sm" style={{ fontSize: 11 }}>🎯 Match</button>
-            <button onClick={enrichCandidate} disabled={enriching} className="btn btn-sm" style={{ fontSize: 11, color: 'var(--neon-green)', borderColor: enriching ? 'var(--border)' : 'var(--neon-green)' }}>
-              {enriching ? '⚡ Enriching...' : '⚡ Enrich'}
-            </button>
             <Link href={`/candidates/${candidateId}`} className="btn btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>Full →</Link>
           </div>
         </div>
@@ -282,31 +287,47 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           )}
 
           {/* AI Summary */}
-          {c.ai_notes && (
-            <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, background: 'var(--accent-bg)', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <span style={{ fontSize: 13 }}>🧠</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Summary</span>
-              </div>
-              <p style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{c.ai_notes}</p>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                🧠 AI Summary
+              </h3>
+              {c.ai_notes ? (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={enrichSummary} disabled={enriching} className="btn btn-sm" style={{ fontSize: 10, padding: '2px 8px' }}>{enriching ? '...' : '↻'}</button>
+                  <button onClick={clearSummary} className="btn btn-sm" style={{ fontSize: 10, padding: '2px 8px', color: 'var(--danger)' }}>✕</button>
+                </div>
+              ) : (
+                <button onClick={enrichSummary} disabled={enriching} className="btn btn-sm" style={{ fontSize: 11, color: 'var(--neon-green)', borderColor: 'var(--neon-green)' }}>
+                  {enriching ? '🧠 Analyzing...' : '🧠 Generate'}
+                </button>
+              )}
             </div>
-          )}
+            {c.ai_notes ? (
+              <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--accent-bg)', border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+                {c.ai_notes}
+              </div>
+            ) : !enriching && (
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Click Generate to create a searchable AI summary with skills and tags</p>
+            )}
+          </div>
 
-          {/* Enrich results — phone options to confirm */}
-          {enrichResult?.phoneOptions?.length > 1 && !enrichResult.phoneOptions[0]?.confirmed && (
+          {/* Phone results to confirm */}
+          {phoneResults && phoneResults.length > 0 && (
             <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, background: 'var(--success-bg)', border: '1px solid var(--neon-green)' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon-green)', marginBottom: 6 }}>📞 Found {enrichResult.phoneOptions.length} numbers — confirm the right one:</p>
-              {enrichResult.phoneOptions.map((p: any, i: number) => (
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon-green)', marginBottom: 6 }}>📞 Found {phoneResults.length} — tap to confirm:</p>
+              {phoneResults.map((p: any, i: number) => (
                 <div key={i} onClick={() => confirmPhone(p.number)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, marginBottom: 3, cursor: 'pointer', border: '1px solid var(--border)', transition: 'all 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--success-bg)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <span>{i === 0 ? '⭐' : '📞'}</span>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--neon-green)' }}>{p.number}</p>
-                    <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{p.source} · {p.confidence}</p>
+                    <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{p.source} · {p.confidence}{p.address ? ` · ${p.address}` : ''}</p>
                   </div>
                   <span style={{ fontSize: 10, color: 'var(--neon-green)', fontWeight: 600 }}>Confirm ✓</span>
                 </div>
               ))}
+              <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>Confirming auto-applies to all {c.current_company} candidates nearby</p>
             </div>
           )}
 
@@ -320,6 +341,19 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
               <Field label="Personal Email" field="personal_email" type="email" />
             </div>
             {c.linkedin && <div style={{ marginTop: 2 }}><label style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase' }}>LinkedIn</label><a href={c.linkedin} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--accent)', display: 'block', wordBreak: 'break-all' }}>{c.linkedin.length > 55 ? c.linkedin.slice(0, 53) + '…' : c.linkedin}</a></div>}
+
+            {/* Find Phone + Re-search */}
+            {!c.work_phone && c.current_company ? (
+              <button onClick={findWorkPhone} disabled={findingPhone} className="btn btn-sm"
+                style={{ marginTop: 10, width: '100%', justifyContent: 'center', fontSize: 13, color: 'var(--neon-green)', borderColor: 'var(--neon-green)' }}>
+                {findingPhone ? `🔍 Searching ${c.current_company}...` : '📞 Find Work Phone'}
+              </button>
+            ) : c.work_phone && (
+              <button onClick={() => { saveField('work_phone', ''); setPhoneResults(null) }} className="btn btn-sm"
+                style={{ marginTop: 6, width: '100%', justifyContent: 'center', fontSize: 11, color: 'var(--text-tertiary)' }}>
+                ↻ Re-search phone
+              </button>
+            )}
           </div>
 
           {/* Professional */}
@@ -355,8 +389,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
             <h3 style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Documents</h3>
             {c.resume_url ? (
               <div style={{ padding: '8px 12px', background: 'var(--accent-bg)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>📄</span>
-                <a href={c.resume_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, flex: 1 }}>{c.resume_name || 'Resume'}</a>
+                <span>📄</span><a href={c.resume_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, flex: 1 }}>{c.resume_name || 'Resume'}</a>
                 <button onClick={async () => { await (sb as any).from('candidates').update({ resume_url: null, resume_name: null }).eq('id', candidateId); load(); showToast('Removed') }} className="btn btn-sm" style={{ fontSize: 10, color: 'var(--danger)', padding: '2px 6px' }}>×</button>
               </div>
             ) : (
@@ -378,9 +411,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
 
           {/* AI Messages */}
           <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              AI Messages <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)' }}>Waypoint Search</span>
-            </h3>
+            <h3 style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Messages <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)' }}>Waypoint Search</span></h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {MSG_TYPES.map(mt => (
                 <button key={mt.key} onClick={() => generateMessage(mt.key)} disabled={generatingMsg}
@@ -389,7 +420,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
                 </button>
               ))}
             </div>
-            {generatingMsg && <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 8, textAlign: 'center' }}>✨ Writing custom message...</p>}
+            {generatingMsg && <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 8, textAlign: 'center' }}>✨ Writing...</p>}
             {generatedMsg && (
               <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 8, background: 'var(--card-bg-hover)', border: '1px solid var(--border)' }}>
                 <pre style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', margin: 0 }}>{generatedMsg}</pre>
@@ -403,10 +434,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           </div>
 
           {/* Activity */}
-          <div>
-            <h3 style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity</h3>
-            <ActivityFeed candidateId={candidateId} />
-          </div>
+          <div><h3 style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
         </div>
       </div>
       <style jsx global>{`@keyframes slideInRight{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
