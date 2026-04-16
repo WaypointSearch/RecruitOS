@@ -4,6 +4,8 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import { getAllStateAbbrs, US_STATES } from '@/lib/geo-intelligence'
 import ActivityFeed from './[id]/ActivityFeed'
+import FollowUpList from '@/components/followups/FollowUpList'
+import FollowUpModal from '@/components/followups/FollowUpModal'
 
 interface Props {
   candidateId: string; onClose: () => void; onUpdated?: () => void
@@ -44,6 +46,8 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
   const [generatingMsg, setGeneratingMsg] = useState(false)
   const [generatedMsg, setGeneratedMsg] = useState('')
   const [msgType, setMsgType] = useState('')
+  const [showFollowUp, setShowFollowUp] = useState(false)
+  const [followUpRefresh, setFollowUpRefresh] = useState(0)
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500) }
 
@@ -244,7 +248,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             <div tabIndex={0} onClick={e => e.currentTarget.focus()} onFocus={() => setAvatarFocused(true)} onBlur={() => setAvatarFocused(false)}
               title="Click then Ctrl+V to paste photo from LinkedIn"
-              style={{ width: 80, height: 80, borderRadius: '50%', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '2px solid var(--neon-green)' : '2px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 16px var(--neon-green)' : 'none' }}>
+              style={{ width: 160, height: 160, borderRadius: '50%', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '2px solid var(--neon-green)' : '2px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 16px var(--neon-green)' : 'none' }}>
               {uploadingAvatar ? '⏳' : c.avatar_url ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
             </div>
             {avatarFocused && <p style={{ fontSize: 10, color: 'var(--neon-green)', marginBottom: 4, fontWeight: 600 }}>Paste photo (Ctrl+V)</p>}
@@ -258,6 +262,7 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
           <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
             <button onClick={() => setShowHotlistAdd(!showHotlistAdd)} className="btn btn-sm" style={{ fontSize: 11 }}>🔥 Hotlist</button>
             <button onClick={() => setShowJobMatch(!showJobMatch)} className="btn btn-sm" style={{ fontSize: 11 }}>🎯 Match</button>
+            <button onClick={() => setShowFollowUp(true)} className="btn btn-sm" style={{ fontSize: 11, color: 'var(--neon-green)', borderColor: 'var(--neon-green)' }}>📅 Follow Up</button>
             <Link href={`/candidates/${candidateId}`} className="btn btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>Full →</Link>
           </div>
         </div>
@@ -433,10 +438,22 @@ export default function CandidateSidePanel({ candidateId, onClose, onUpdated, on
             )}
           </div>
 
+          {/* Follow-Ups */}
+          <div style={{ marginBottom: 14 }}>
+            <FollowUpList candidateId={candidateId} compact={true} onChanged={() => setFollowUpRefresh(r => r + 1)} />
+          </div>
+
           {/* Activity */}
           <div><h3 style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity</h3><ActivityFeed candidateId={candidateId} /></div>
         </div>
       </div>
+      {showFollowUp && (
+        <FollowUpModal
+          candidateId={candidateId}
+          onClose={() => setShowFollowUp(false)}
+          onSaved={() => { setFollowUpRefresh(r => r + 1); if (onUpdated) onUpdated() }}
+        />
+      )}
       <style jsx global>{`@keyframes slideInRight{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
     </>
   )

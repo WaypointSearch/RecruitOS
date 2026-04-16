@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
+import DashboardFollowUps from '@/components/followups/DashboardFollowUps'
 
 // Curated motivational quotes
 const QUOTES = [
@@ -162,6 +163,9 @@ export default function DashboardPage() {
         </div>
         <p style={{fontSize:11,color:'var(--text-tertiary)'}}>{stats.pipeline} candidates · 20% fee</p>
       </div>
+
+      {/* Follow-Ups */}
+      <DashboardFollowUps />
 
       {/* Three columns */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}} className="stats-grid">

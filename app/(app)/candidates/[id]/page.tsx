@@ -7,6 +7,7 @@ import ActivityFeed from './ActivityFeed'
 import EditCandidateModal from './EditCandidateModal'
 import DeleteCandidateButton from './DeleteCandidateButton'
 import ResumeUpload from './ResumeUpload'
+import FollowUpList from '@/components/followups/FollowUpList'
 
 export default function CandidateDetailPage() {
   const params = useParams()
@@ -92,7 +93,7 @@ export default function CandidateDetailPage() {
               onFocus={() => setAvatarFocused(true)}
               onBlur={() => setAvatarFocused(false)}
               title="Click, then Ctrl+V to paste photo"
-              style={{ width: 96, height: 96, borderRadius: '50%', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '3px solid var(--neon-green)' : '3px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 20px var(--neon-green)' : 'none' }}
+              style={{ width: 192, height: 192, borderRadius: '50%', margin: '0 auto 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, fontWeight: 700, overflow: 'hidden', cursor: 'pointer', border: avatarFocused ? '3px solid var(--neon-green)' : '3px solid var(--accent)', background: c.avatar_url ? 'transparent' : 'var(--accent)', color: 'white', transition: 'all 0.25s', outline: 'none', boxShadow: avatarFocused ? '0 0 20px var(--neon-green)' : 'none' }}
             >
               {uploadingAvatar ? '⏳' : c.avatar_url ? <img src={c.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
             </div>
@@ -148,6 +149,11 @@ export default function CandidateDetailPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{c.tags.map((t: string) => <span key={t} className="badge badge-gray" style={{ fontSize: 12 }}>{t}</span>)}</div>
             </div>
           )}
+
+          {/* Follow-Ups */}
+          <div className="card" style={{ padding: '16px 18px' }}>
+            <FollowUpList candidateId={id} />
+          </div>
 
           {pipeline.length > 0 && (
             <div className="card" style={{ padding: '16px 18px' }}>
